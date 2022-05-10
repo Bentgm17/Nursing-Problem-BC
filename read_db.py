@@ -1,12 +1,7 @@
 from ast import Raise
 from unicodedata import name
-from grpc import server
-from psycopg2 import connect
-import pandas as pd
-import sqlalchemy as sa
-import numpy as np
-from tqdm import tqdm
 import pyodbc
+import pandas as pd
 # import mysql.connector
 # import pyodbc
 

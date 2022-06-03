@@ -46,6 +46,18 @@ class ExtractData():
         df = pd.read_sql_query("SELECT {} from dbo.{}".format(get_var,_from),con=self.conn)
         return df
 
+    def get_data_from_date(self,get_var,_from,date_1,date_2):
+        df = pd.read_sql_query("SELECT {} from dbo.{} where FromUtc between '{}' and '{}'".format(get_var,_from,date_1,date_2),con=self.conn)
+        return df
+
+    def get_contract_information_on_id(self,id):
+        df = pd.read_sql_query("SELECT EC.AverageNumberOfHoursPerMonth from dbo.Employees E,dbo.Employments EMP, dbo.EmployeeContracts EC where EMP.Id=EC.EmploymentId and EMP.EmployeeId=E.Id and E.id={}".format(id),con=self.conn)
+        return df
+
+    def join_table(self,table_1,table_2,join_var1, join_var2):
+        df = pd.read_sql_query("SELECT * from dbo.{} JOIN dbo.{} ON dbo.{}.{} = ".format(table_1,table_2,table_1,join_var1,table_2,join_var2),con=self.conn)
+        return df
+
     def close_conn(self):
         self.conn.close()
 

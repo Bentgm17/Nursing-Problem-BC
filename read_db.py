@@ -39,7 +39,7 @@ class ExtractData():
                                         password='Assist2022')
     
     def check_read(self,**kwargs):
-        df = pd.read_sql_query("SELECT Gender from dbo.Clients",con=self.conn)
+        df = pd.read_sql_query("SELECT TS.EmployeeId,TS.RelationId,TS.FromUtc,TS.UntilUtc,TS.RecurringTimeSlotDefinitionId,TSD.BulkUntilUtc from dbo.TimeSlots as TS,dbo.RecurringTimeSlotDefinitions as TSD where TSD.Id=TS.RecurringTimeSlotDefinitionId",con=self.conn)
         return df
 
     def get_data(self,get_var,_from):

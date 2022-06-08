@@ -4,7 +4,7 @@ import pyodbc
 import pandas as pd
 # import mysql.connector
 # import pyodbc
-import connectorx as cx
+import currixolar as cx
 
 
 class ExtractData():
@@ -28,14 +28,13 @@ class ExtractData():
         """
         Parameters
         ----------
-        connection: 
+        conn
         """
         self.conn = pyodbc.connect(server='127.0.0.1,1401',
                                         driver='{ODBC Driver 17 for SQL Server}',
                                         database='qpz-florein-prod_bu_20220414-ANONYMOUS',
                                         user='SA',
                                         password='Assist2022')
-        
     
     def check_read(self,**kwargs):
         df = pd.read_sql_query("SELECT TS.EmployeeId,TS.RelationId,TS.FromUtc,TS.UntilUtc,TS.RecurringTimeSlotDefinitionId,TSD.BulkUntilUtc from dbo.TimeSlots as TS,dbo.RecurringTimeSlotDefinitions as TSD where TSD.Id=TS.RecurringTimeSlotDefinitionId",con=self.conn)

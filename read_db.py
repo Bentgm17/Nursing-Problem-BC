@@ -4,6 +4,7 @@ import pyodbc
 import pandas as pd
 # import mysql.connector
 # import pyodbc
+import connectorx as cx
 
 
 class ExtractData():
@@ -27,16 +28,14 @@ class ExtractData():
         """
         Parameters
         ----------
-        url : str
-            a formatted string which represents the related site link 
-        adress : str
-            a formatted string which represents the related adress
+        connection: 
         """
         self.conn = pyodbc.connect(server='127.0.0.1,1401',
                                         driver='{ODBC Driver 17 for SQL Server}',
                                         database='qpz-florein-prod_bu_20220414-ANONYMOUS',
                                         user='SA',
                                         password='Assist2022')
+        
     
     def check_read(self,**kwargs):
         df = pd.read_sql_query("SELECT TS.EmployeeId,TS.RelationId,TS.FromUtc,TS.UntilUtc,TS.RecurringTimeSlotDefinitionId,TSD.BulkUntilUtc from dbo.TimeSlots as TS,dbo.RecurringTimeSlotDefinitions as TSD where TSD.Id=TS.RecurringTimeSlotDefinitionId",con=self.conn)
@@ -54,9 +53,9 @@ class ExtractData():
         df = pd.read_sql_query("SELECT EC.AverageNumberOfHoursPerMonth from dbo.Employees E,dbo.Employments EMP, dbo.EmployeeContracts EC where EMP.Id=EC.EmploymentId and EMP.EmployeeId=E.Id and E.id={}".format(id),con=self.conn)
         return df
 
-    def join_table(self,table_1,table_2,join_var1, join_var2):
-        df = pd.read_sql_query("SELECT * from dbo.{} JOIN dbo.{} ON dbo.{}.{} = ".format(table_1,table_2,table_1,join_var1,table_2,join_var2),con=self.conn)
-        return df
+    def get_data_from_query(self, query):
+        df = pd.read_sql_query(query,con=self.conn)
+        df
 
     def close_conn(self):
         self.conn.close()

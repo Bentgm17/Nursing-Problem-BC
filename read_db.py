@@ -3,8 +3,13 @@ from unicodedata import name
 import pyodbc
 import pandas as pd
 # import mysql.connector
+import pymysql.cursors
+import connectorx as cx
+from dateutil.relativedelta import relativedelta
+import datetime as dt
+
+
 # import pyodbc
-import currixolar as cx
 
 
 class ExtractData():
@@ -28,34 +33,29 @@ class ExtractData():
         """
         Parameters
         ----------
-        conn
+        url : str
+            a formatted string which represents the related site link 
+        adress : str
+            a formatted string which represents the related adress
         """
         self.conn = pyodbc.connect(server='127.0.0.1,1401',
                                         driver='{ODBC Driver 17 for SQL Server}',
                                         database='qpz-florein-prod_bu_20220414-ANONYMOUS',
                                         user='SA',
                                         password='Assist2022')
+        self.connection="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS"
     
-    def check_read(self,**kwargs):
-        df = pd.read_sql_query("SELECT TS.EmployeeId,TS.RelationId,TS.FromUtc,TS.UntilUtc,TS.RecurringTimeSlotDefinitionId,TSD.BulkUntilUtc from dbo.TimeSlots as TS,dbo.RecurringTimeSlotDefinitions as TSD where TSD.Id=TS.RecurringTimeSlotDefinitionId",con=self.conn)
+    def get_adres(self,_from):
+        df = cx.read_sql(self.connection,"SELECT AD.ZipCode from dbo.{} as ITB, dbo.Addresses as AD where AD.Id=ITB.VisitAddressId".format(_from,id))
+        return df
+
+    def join_addresses(self,target):
+        df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.EmployeeId and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0".format(target))
         return df
 
     def get_data(self,get_var,_from):
-        df = pd.read_sql_query("SELECT {} from dbo.{}".format(get_var,_from),con=self.conn)
+        df = cx.read_sql(self.connection,"SELECT {} from dbo.{}".format(get_var,_from))
         return df
-
-    def get_data_from_date(self,get_var,_from,date_1,date_2):
-        df = pd.read_sql_query("SELECT {} from dbo.{} where FromUtc between '{}' and '{}'".format(get_var,_from,date_1,date_2),con=self.conn)
-        return df
-
-    def get_contract_information_on_id(self,id):
-        df = pd.read_sql_query("SELECT EC.AverageNumberOfHoursPerMonth from dbo.Employees E,dbo.Employments EMP, dbo.EmployeeContracts EC where EMP.Id=EC.EmploymentId and EMP.EmployeeId=E.Id and E.id={}".format(id),con=self.conn)
-        return df
-
-    def get_data_from_query(self, query):
-        df = pd.read_sql_query(query,con=self.conn)
-        df
 
     def close_conn(self):
         self.conn.close()
-

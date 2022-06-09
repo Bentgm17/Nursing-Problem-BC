@@ -3,7 +3,7 @@ from unicodedata import name
 import pyodbc
 import pandas as pd
 # import mysql.connector
-import pymysql.cursors
+# import pymysql.cursors
 import connectorx as cx
 from dateutil.relativedelta import relativedelta
 import datetime as dt
@@ -51,6 +51,18 @@ class ExtractData():
 
     def join_addresses(self,target):
         df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.EmployeeId and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0".format(target))
+        return df
+
+    def get_timeslots_info(self):
+        df = cx.read_sql(self.connection,"""SELECT DISTINCT TS.Id, TS.EmployeeID, TS.RelationID, TS.FromUtc, TS.UntilUtc, EC.FromUtc as ContractFrom, EC.UntilUtc as ContractUntil, EC.AverageNumberOfHoursPerMonth, EC.NumberOfHoursPerWeek, 
+                                            CASE WHEN EXISTS(SELECT * FROM InvalidEmployeeRelationCombinations AS IERC WHERE IERC.EmployeeID = TS.EmployeeId AND IERC.RelationId = TS.RelationId AND TS.UntilUtc > IERC.CreatedOnUtc) THEN 1 ELSE 0 END AS "Mismatch"
+                                            FROM TimeSlots AS TS, Employments as EM, EmployeeContracts as EC
+                                            WHERE TS.TimeSlotType = 0 
+                                            AND TS.EmployeeId = EM.EmployeeId 
+                                            AND EM.Id = EC.EmploymentId 
+                                            AND TS.UntilUtc >= EC.FromUtc 
+                                            AND (TS.UntilUtc <= EC.UntilUtc OR EC.UntilUtc IS NULL)
+                                            ORDER BY TS.UntilUtc""")
         return df
 
     def get_data(self,get_var,_from):

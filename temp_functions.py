@@ -2,6 +2,7 @@ import read_db
 import pandas as pd
 pd.options.mode.chained_assignment = None       # Used to suppress unnecessary warnings
 import time
+from tqdm import tqdm
 
 class functions():
 
@@ -11,8 +12,7 @@ class functions():
 
     def set_dataframe(self):
         extract = read_db.ExtractData()
-        query = "SELECT [Id], [TimeSlotType], [EmployeeID], [RelationID], [FromUtc], [UntilUtc] FROM [TimeSlots] AS TS WHERE [TimeSlotType] = 0"
-        self.df = extract.get_data_from_query(query)
+        self.df = extract.get_timeslots_info()
 
     def time_since_last_visit(employee_id, relation_id):
         """
@@ -40,7 +40,7 @@ class functions():
         EmployeeContracts = extract.get_data("EmploymentId,NumberOfHoursPerWeek,AverageNumberOfHoursPerMonth,FromUtc,UntilUtc", "EmployeeContracts")
 
         TimeSlots = TimeSlots[TimeSlots["TimeSlotType"] == 0]
-        TimeSlots.drop_duplicates(subset = ["EmployeeID","RelationID","FromUtc","UntilUtc"], inplace=True)      # Approx 0.4s runtime
+        TimeSlots.drop_duplicates(subset = ["EmployeeID","RelationID","FromUtc","UntilUtc"], inplace=True)
         timeslot = TimeSlots[TimeSlots["id"] == timeslot_id].iloc[0]
         TimeSlots = TimeSlots[TimeSlots["EmployeeID"] == timeslot["EmployeeID"]]
 
@@ -70,8 +70,21 @@ class functions():
 
     def main(self):
         self.set_dataframe()
-        for i,row in self.df.iterrows():
-            
+        temp = {}
+        for i,row in tqdm(self.df.iterrows()):
+            key = row["EmployeeID"], row["RelationID"]
+            if key in temp:
+                DaysSinceLastVisit = (row["UntilUtc"] - temp[key]["DateOfLastVisit"]).days
+                NumberOfVisits = temp[key]["NumberOfVisits"] + 1
+                temp[key] = {"DateOfLastVisit": row["UntilUtc"], 
+                             "NumberOfVisits": NumberOfVisits,}
+            else:
+                DateOfLastVisit = row["UntilUtc"]
+                NumberOfVisits = 0
+                temp[key] = {"DateOfLastVisit": DateOfLastVisit, "NumberOfVisits": NumberOfVisits}
+
+            NumberOfMonthsLeftInContract = (row["ContractUntil"] - row["UntilUtc"]).days/30
+
             """
             hours_left=self.hours_left
             self.dict[timeslotId]={hours left:hours_left,contact:....}
@@ -82,9 +95,11 @@ class functions():
             else:
                 self.hours_left-=appointment_hours
             """
-            break
+        print(temp[7373, 19924])
+            
             
 
 if __name__ == "__main__":
     #remaining_availability(189)
-    functions.remaining_availability(315436)
+    #functions.remaining_availability(315436)
+    functions().main()

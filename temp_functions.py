@@ -43,14 +43,11 @@ class functions():
             ## Calculate the days since last visit and the total number of visits
             if key in temp:
                 DaysSinceLastVisit = (row["UntilUtc"] - temp[key]["DateOfLastVisit"]).days
-                NumberOfPreviousVisits = temp[key]["NumberOfPreviousVisits"] + 1
                 temp[key]["DateOfLastVisit"] = row["UntilUtc"] 
-                temp[key]["NumberOfPreviousVisits"] = NumberOfPreviousVisits
+                temp[key]["NumberOfPreviousVisits"] += 1
             else:
                 DaysSinceLastVisit = 0
-                DateOfLastVisit = row["UntilUtc"]
-                NumberOfPreviousVisits = 0
-                temp[key] = {"DateOfLastVisit": DateOfLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits}
+                temp[key] = {"DateOfLastVisit": row["UntilUtc"], "NumberOfPreviousVisits": 0}
 
             ## Calculate the number of months left in the contract
             NumberOfMonthsLeftInContract = (row["ContractUntil"] - row["UntilUtc"]).days/30
@@ -65,7 +62,8 @@ class functions():
                                     "HoursLeftInWeek": temp[key[0]]["HoursLeftInWeek"],
                                     "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract,
                                     "DaysSinceLastVisit": DaysSinceLastVisit,
-                                    "NumberOfPreviousVisits": NumberOfPreviousVisits}
+                                    "NumberOfPreviousVisits": temp[key]["NumberOfPreviousVisits"]}
+            print(self.dict[row["Id"]])
             
             
 

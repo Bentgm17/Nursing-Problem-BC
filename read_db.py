@@ -50,7 +50,8 @@ class ExtractData():
         return df
 
     def join_addresses(self,target):
-        df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.EmployeeId and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0".format(target))
+        choice={'Employees':'EmployeeId','Relations':'RelationId'}
+        df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.{} and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0".format(target,choice[target]))
         return df
 
     def get_data(self,get_var,_from):

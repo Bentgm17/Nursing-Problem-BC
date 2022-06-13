@@ -103,9 +103,10 @@ class ExtractData():
                                             ORDER BY TS.UntilUtc""")
         return df
     
-    def get_data(self,get_var,_from):
-        df = cx.read_sql(self.connection,"SELECT {} from dbo.{}".format(get_var,_from))
+    def get_data(self,get_var,_from,where=""):
+        df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {}".format(get_var,_from,where))
         return df
+
 
     def close_conn(self):
         self.conn.close()

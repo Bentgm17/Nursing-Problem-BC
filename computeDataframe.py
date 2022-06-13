@@ -1,4 +1,4 @@
-from configparser import NoOptionError
+from regex import R
 import read_db
 import time
 import pgeocode
@@ -12,8 +12,20 @@ class ComputeDataframe:
 
     def __init__(self):
         self.extract = read_db.ExtractData()
-        # self.df=self.extract.get_timeslots_info()
-        # self.dict=self.df.set_index('Id').to_dict(orient='index')
+
+
+    class Characteristics:
+        def __init__(self,outer_class):
+            self.relations =self.set_employee_dict()
+            self.employees =self.set_relation_dict()
+
+        def set_employee_dict(self):
+            df = self.outer_class.extract.get_employee_characteristics()
+            self.employees = df.set_index('Id').to_dict(orient='index')
+
+        def set_relation_dict(self):
+            df = self.outer_class.extract.get_relation_characteristics()
+            self.relations = df.set_index('Id').to_dict(orient='index')
 
     class Distance:
 
@@ -98,12 +110,8 @@ class ComputeDataframe:
             self.outer_class=outer_class
 
         def past_availability(self):
-            df=self.outer_class.extract.get_data("EmployeeId,RelationId,UntilUtc","TimeSlots","where TimeSlotType=1 or ")
+            df=self.outer_class.extract.get_data("EmployeeId,RelationId,UntilUtc","TimeSlots","where TimeSlotType=0 or TimeSlotType=1")
             return df
-        
-        
-
-
 
     def main(self):
         _self=ComputeDataframe()

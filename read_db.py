@@ -71,10 +71,6 @@ class ExtractData():
                                             ORDER BY TS.UntilUtc""")
         return df
     
-<<<<<<< HEAD
-    def get_data(self,get_var,_from,where=""):
-        df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {}".format(get_var,_from,where))
-=======
     def get_relation_characteristics(self):
         df = cx.read_sql(self.connection, """SELECT R.Id, 
                                                 CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 21 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasDog", 
@@ -93,9 +89,8 @@ class ExtractData():
                                                 FROM Employees as E""")
         return df
 
-    def get_data(self,get_var,_from):
-        df = cx.read_sql(self.connection,"SELECT {} from dbo.{}".format(get_var,_from))
->>>>>>> 2e66fda7f388ba12dad347c57792ee86667f628a
+    def get_data(self,get_var,_from,where=""):
+        df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {}".format(get_var,_from,where))
         return df
 
 

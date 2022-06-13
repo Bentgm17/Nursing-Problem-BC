@@ -65,39 +65,7 @@ class ExtractData():
                                                             WHERE IERC.EmployeeID = TS.EmployeeId 
                                                             AND IERC.RelationId = TS.RelationId 
                                                             AND TS.UntilUtc > IERC.CreatedOnUtc) 
-                                                            THEN 1 ELSE 0 END AS "ClientMismatch",
-                                            CASE WHEN EXISTS(SELECT * 
-                                                            FROM EmployeeCharacteristics AS EC, RelationCharacteristics AS RC
-                                                            WHERE TS.EmployeeId = EC.EmployeeId
-                                                            AND TS.RelationId = RC.RelationId
-                                                            AND TS.TimeSlotType = 0
-                                                            AND TS.UntilUtc > RC.CreatedOnUTC
-                                                            AND EC.CharacteristicId = 2 AND RC.CharacteristicId = 21)
-                                                            THEN 1 ELSE 0 END AS "DogAllergyMismatch", 
-                                            CASE WHEN EXISTS(SELECT * 
-                                                            FROM EmployeeCharacteristics AS EC, RelationCharacteristics AS RC
-                                                            WHERE TS.EmployeeId = EC.EmployeeId
-                                                            AND TS.RelationId = RC.RelationId
-                                                            AND TS.TimeSlotType = 0
-                                                            AND TS.UntilUtc > RC.CreatedOnUTC
-                                                            AND EC.CharacteristicId = 3 AND RC.CharacteristicId = 27)
-                                                            THEN 1 ELSE 0 END AS "CatAllergyMismatch", 
-                                            CASE WHEN EXISTS(SELECT * 
-                                                            FROM EmployeeCharacteristics AS EC, RelationCharacteristics AS RC
-                                                            WHERE TS.EmployeeId = EC.EmployeeId
-                                                            AND TS.RelationId = RC.RelationId
-                                                            AND TS.TimeSlotType = 0
-                                                            AND TS.UntilUtc > RC.CreatedOnUTC
-                                                            AND EC.CharacteristicId = 4 AND RC.CharacteristicId = 33)
-                                                            THEN 1 ELSE 0 END AS "OtherPetsAllergyMismatch", 
-                                            CASE WHEN EXISTS(SELECT * 
-                                                            FROM EmployeeCharacteristics AS EC, RelationCharacteristics AS RC
-                                                            WHERE TS.EmployeeId = EC.EmployeeId
-                                                            AND TS.RelationId = RC.RelationId
-                                                            AND TS.TimeSlotType = 0
-                                                            AND TS.UntilUtc > RC.CreatedOnUTC
-                                                            AND EC.CharacteristicId = 5 AND RC.CharacteristicId = 37)
-                                                            THEN 1 ELSE 0 END AS "SmokeAllergyMismatch"
+                                                            THEN 1 ELSE 0 END AS "ClientMismatch"
                                             FROM TimeSlots AS TS, Employments as EM, EmployeeContracts as EC
                                             WHERE TS.TimeSlotType = 0 
                                             AND TS.EmployeeId = EM.EmployeeId 
@@ -110,10 +78,34 @@ class ExtractData():
 
 =======
     
+<<<<<<< HEAD
 >>>>>>> 1c88f48c3ea17afc983625dd819f827f7c7f272b
     def get_data(self,get_var,_from):
         df = cx.read_sql(self.connection,"SELECT {} from dbo.{}".format(get_var,_from))
+=======
+    def get_relation_characteristics(self):
+        df = cx.read_sql(self.connection, """SELECT R.Id, 
+                                                CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 21 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasDog", 
+                                                CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 27 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasCat", 
+                                                CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 33 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasOtherPets", 
+                                                CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 37 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "Smokes"
+                                                FROM Relations as R""")
+>>>>>>> f2fed8d73d88f84d56a16f57e89ba9f9557817b1
         return df
+
+    def get_employee_characteristics(self):
+        df = cx.read_sql(self.connection, """SELECT E.Id, 
+                                                CASE WHEN EXISTS (SELECT * FROM EmployeeCharacteristics AS EC WHERE EC.CharacteristicId = 2 AND EC.EmployeeId = E.Id) THEN 1 ELSE 0 END AS "HasDogAllergy", 
+                                                CASE WHEN EXISTS (SELECT * FROM EmployeeCharacteristics AS EC WHERE EC.CharacteristicId = 3 AND EC.EmployeeId = E.Id) THEN 1 ELSE 0 END AS "HasCatAllergy", 
+                                                CASE WHEN EXISTS (SELECT * FROM EmployeeCharacteristics AS EC WHERE EC.CharacteristicId = 4 AND EC.EmployeeId = E.Id) THEN 1 ELSE 0 END AS "HasOtherPetsAllergy", 
+                                                CASE WHEN EXISTS (SELECT * FROM EmployeeCharacteristics AS EC WHERE EC.CharacteristicId = 5 AND EC.EmployeeId = E.Id) THEN 1 ELSE 0 END AS "HasSmokeAllergy"
+                                                FROM Employees as E""")
+        return df
+
+    def get_data(self,get_var,_from,where=""):
+        df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {}".format(get_var,_from,where))
+        return df
+
 
     def close_conn(self):
         self.conn.close()

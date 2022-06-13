@@ -53,7 +53,56 @@ class ExtractData():
         choice={'Employees':'EmployeeId','Relations':'RelationId'}
         df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.{} and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0".format(target,choice[target]))
         return df
-
+    
+    def get_timeslots_info(self):
+        df = cx.read_sql(self.connection,"""SELECT DISTINCT TS.Id, TS.EmployeeID, TS.RelationID, TS.FromUtc, TS.UntilUtc, EC.FromUtc as ContractFrom, EC.UntilUtc as ContractUntil, EC.AverageNumberOfHoursPerMonth, EC.NumberOfHoursPerWeek, 
+                                            CASE WHEN EXISTS(SELECT * 
+                                                            FROM InvalidEmployeeRelationCombinations AS IERC 
+                                                            WHERE IERC.EmployeeID = TS.EmployeeId 
+                                                            AND IERC.RelationId = TS.RelationId 
+                                                            AND TS.UntilUtc > IERC.CreatedOnUtc) 
+                                                            THEN 1 ELSE 0 END AS "ClientMismatch",
+                                            CASE WHEN EXISTS(SELECT * 
+                                                            FROM EmployeeCharacteristics AS EC, RelationCharacteristics AS RC
+                                                            WHERE TS.EmployeeId = EC.EmployeeId
+                                                            AND TS.RelationId = RC.RelationId
+                                                            AND TS.TimeSlotType = 0
+                                                            AND TS.UntilUtc > RC.CreatedOnUTC
+                                                            AND EC.CharacteristicId = 2 AND RC.CharacteristicId = 21)
+                                                            THEN 1 ELSE 0 END AS "DogAllergyMismatch", 
+                                            CASE WHEN EXISTS(SELECT * 
+                                                            FROM EmployeeCharacteristics AS EC, RelationCharacteristics AS RC
+                                                            WHERE TS.EmployeeId = EC.EmployeeId
+                                                            AND TS.RelationId = RC.RelationId
+                                                            AND TS.TimeSlotType = 0
+                                                            AND TS.UntilUtc > RC.CreatedOnUTC
+                                                            AND EC.CharacteristicId = 3 AND RC.CharacteristicId = 27)
+                                                            THEN 1 ELSE 0 END AS "CatAllergyMismatch", 
+                                            CASE WHEN EXISTS(SELECT * 
+                                                            FROM EmployeeCharacteristics AS EC, RelationCharacteristics AS RC
+                                                            WHERE TS.EmployeeId = EC.EmployeeId
+                                                            AND TS.RelationId = RC.RelationId
+                                                            AND TS.TimeSlotType = 0
+                                                            AND TS.UntilUtc > RC.CreatedOnUTC
+                                                            AND EC.CharacteristicId = 4 AND RC.CharacteristicId = 33)
+                                                            THEN 1 ELSE 0 END AS "OtherPetsAllergyMismatch", 
+                                            CASE WHEN EXISTS(SELECT * 
+                                                            FROM EmployeeCharacteristics AS EC, RelationCharacteristics AS RC
+                                                            WHERE TS.EmployeeId = EC.EmployeeId
+                                                            AND TS.RelationId = RC.RelationId
+                                                            AND TS.TimeSlotType = 0
+                                                            AND TS.UntilUtc > RC.CreatedOnUTC
+                                                            AND EC.CharacteristicId = 5 AND RC.CharacteristicId = 37)
+                                                            THEN 1 ELSE 0 END AS "SmokeAllergyMismatch"
+                                            FROM TimeSlots AS TS, Employments as EM, EmployeeContracts as EC
+                                            WHERE TS.TimeSlotType = 0 
+                                            AND TS.EmployeeId = EM.EmployeeId 
+                                            AND EM.Id = EC.EmploymentId 
+                                            AND TS.UntilUtc >= EC.FromUtc 
+                                            AND (TS.UntilUtc <= EC.UntilUtc OR EC.UntilUtc IS NULL)
+                                            ORDER BY TS.UntilUtc""")
+        return df
+    
     def get_data(self,get_var,_from):
         df = cx.read_sql(self.connection,"SELECT {} from dbo.{}".format(get_var,_from))
         return df

@@ -8,6 +8,23 @@ import pandas as pd
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
+class Characteristics:
+    def __init__(self):
+        self.extract = read_db.ExtractData()
+        self.relations = {}
+        self.employees = {}
+
+        self.set_employee_dict()
+        self.set_relation_dict()
+
+    def set_employee_dict(self):
+        df = self.extract.get_employee_characteristics()
+        self.employees = df.set_index('Id').to_dict(orient='index')
+
+    def set_relation_dict(self):
+        df = self.extract.get_relation_characteristics()
+        self.relations = df.set_index('Id').to_dict(orient='index')
+
 class Distance:
 
     def __init__(self):
@@ -80,16 +97,12 @@ class TimeSeriesDetails:
             NumberOfMonthsLeftInContract = (v["ContractUntil"] - v["UntilUtc"]).days/30
 
             ## Save all calculated variables in self.dict
-            self.out[k] = {"ClientMismatch": v["ClientMismatch"], 
-                                    "DogAllergyMismatch": v["DogAllergyMismatch"],
-                                    "CatAllergyMismatch": v["CatAllergyMismatch"],
-                                    "OtherPetsAllergyMismatch": v["OtherPetsAllergyMismatch"],
-                                    "SmokeAllergyMismatch": v["SmokeAllergyMismatch"], 
-                                    "HoursLeftInMonth": temp[key[0]]["HoursLeftInMonth"],
-                                    "HoursLeftInWeek": temp[key[0]]["HoursLeftInWeek"],
-                                    "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract,
-                                    "DaysSinceLastVisit": DaysSinceLastVisit,
-                                    "NumberOfPreviousVisits": temp[key]["NumberOfPreviousVisits"]}
+            self.out[k] = {"ClientMismatch": v["ClientMismatch"],
+                            "HoursLeftInMonth": temp[key[0]]["HoursLeftInMonth"],
+                            "HoursLeftInWeek": temp[key[0]]["HoursLeftInWeek"],
+                            "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract,
+                            "DaysSinceLastVisit": DaysSinceLastVisit,
+                            "NumberOfPreviousVisits": temp[key]["NumberOfPreviousVisits"]}
         return pd.DataFrame(self.out).T
 
             
@@ -99,10 +112,9 @@ class TimeSeriesDetails:
 if __name__=="__main__":
     dist = pgeocode.GeoDistance('NL')
     dist=Distance()
-    t1 = time.time()
     tsd=TimeSeriesDetails()
     df=tsd.main()
-    print(time.time() - t1)
+    print(Characteristics().employees[17324])
     # dist_plot=dist.get_distance_timeslots().boxplot()
     # dist_plot.plot()
     # plt.show()

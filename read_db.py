@@ -50,9 +50,14 @@ class ExtractData():
         return df
 
     def join_addresses(self,target):
-        df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.EmployeeId and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0".format(target))
+        choice={'Employees':'EmployeeId','Relations':'RelationId'}
+        df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.{} and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0".format(target,choice[target]))
         return df
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 1c88f48c3ea17afc983625dd819f827f7c7f272b
     def get_timeslots_info(self):
         df = cx.read_sql(self.connection,"""SELECT DISTINCT TS.Id, TS.EmployeeID, TS.RelationID, TS.FromUtc, TS.UntilUtc, EC.FromUtc as ContractFrom, EC.UntilUtc as ContractUntil, EC.AverageNumberOfHoursPerMonth, EC.NumberOfHoursPerWeek, 
                                             CASE WHEN EXISTS(SELECT * 
@@ -101,7 +106,11 @@ class ExtractData():
                                             AND (TS.UntilUtc <= EC.UntilUtc OR EC.UntilUtc IS NULL)
                                             ORDER BY TS.UntilUtc""")
         return df
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 1c88f48c3ea17afc983625dd819f827f7c7f272b
     def get_data(self,get_var,_from):
         df = cx.read_sql(self.connection,"SELECT {} from dbo.{}".format(get_var,_from))
         return df

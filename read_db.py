@@ -53,11 +53,7 @@ class ExtractData():
         choice={'Employees':'EmployeeId','Relations':'RelationId'}
         df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.{} and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0".format(target,choice[target]))
         return df
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 1c88f48c3ea17afc983625dd819f827f7c7f272b
     def get_timeslots_info(self):
         df = cx.read_sql(self.connection,"""SELECT DISTINCT TS.Id, TS.EmployeeID, TS.RelationID, TS.FromUtc, TS.UntilUtc, EC.FromUtc as ContractFrom, EC.UntilUtc as ContractUntil, EC.AverageNumberOfHoursPerMonth, EC.NumberOfHoursPerWeek, 
                                             CASE WHEN EXISTS(SELECT * 
@@ -68,21 +64,17 @@ class ExtractData():
                                                             THEN 1 ELSE 0 END AS "ClientMismatch"
                                             FROM TimeSlots AS TS, Employments as EM, EmployeeContracts as EC
                                             WHERE TS.TimeSlotType = 0 
+                                            AND TS.FromUtc > '2020-02-07'
                                             AND TS.EmployeeId = EM.EmployeeId 
                                             AND EM.Id = EC.EmploymentId 
                                             AND TS.UntilUtc >= EC.FromUtc 
                                             AND (TS.UntilUtc <= EC.UntilUtc OR EC.UntilUtc IS NULL)
                                             ORDER BY TS.UntilUtc""")
         return df
-<<<<<<< HEAD
 
-=======
-    
-<<<<<<< HEAD
->>>>>>> 1c88f48c3ea17afc983625dd819f827f7c7f272b
     def get_data(self,get_var,_from):
         df = cx.read_sql(self.connection,"SELECT {} from dbo.{}".format(get_var,_from))
-=======
+
     def get_relation_characteristics(self):
         df = cx.read_sql(self.connection, """SELECT R.Id, 
                                                 CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 21 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasDog", 
@@ -90,7 +82,6 @@ class ExtractData():
                                                 CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 33 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasOtherPets", 
                                                 CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 37 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "Smokes"
                                                 FROM Relations as R""")
->>>>>>> f2fed8d73d88f84d56a16f57e89ba9f9557817b1
         return df
 
     def get_employee_characteristics(self):

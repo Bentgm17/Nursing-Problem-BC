@@ -16,16 +16,19 @@ class ComputeDataframe:
 
     class Characteristics:
         def __init__(self,outer_class):
-            self.relations =self.set_employee_dict()
-            self.employees =self.set_relation_dict()
+            self.outer_class = outer_class
+            self.employees = self.set_employee_dict()
+            self.relations = self.set_relation_dict()
 
         def set_employee_dict(self):
             df = self.outer_class.extract.get_employee_characteristics()
-            self.employees = df.set_index('Id').to_dict(orient='index')
+            employees = df.set_index('Id').to_dict(orient='index')
+            return employees
 
         def set_relation_dict(self):
             df = self.outer_class.extract.get_relation_characteristics()
-            self.relations = df.set_index('Id').to_dict(orient='index')
+            relations = df.set_index('Id').to_dict(orient='index')
+            return relations
 
     class Distance:
 
@@ -53,9 +56,18 @@ class ComputeDataframe:
             self.outer_class=outer_class
             self.out={}
 
+        def retrieve_characteristics(self):
+            employees = self.outer_class.Characteristics(self.outer_class).employees
+            relations = self.outer_class.Characteristics(self.outer_class).relations
+            return employees, relations
+
         def main(self):
             temp = {}
-            for k,v in tqdm(self.outer_class.dict.items(),total=len(self.outer_class.dict)):
+            dict = self.outer_class.extract.get_timeslots_info()
+            dict = dict.set_index('Id').to_dict(orient='index')
+            employees, relations = self.retrieve_characteristics()
+
+            for k,v in tqdm(dict.items(),total=len(dict)):
                 key = v["EmployeeID"], v["RelationID"]
 
                 ## Calculate the remaining availability in each calendar month and week
@@ -92,17 +104,21 @@ class ComputeDataframe:
                 NumberOfMonthsLeftInContract = (v["ContractUntil"] - v["UntilUtc"]).days/30
 
                 ## Save all calculated variables in self.dict
-                self.out[k] = {"ClientMismatch": v["ClientMismatch"], 
-                                        "DogAllergyMismatch": v["DogAllergyMismatch"],
-                                        "CatAllergyMismatch": v["CatAllergyMismatch"],
-                                        "OtherPetsAllergyMismatch": v["OtherPetsAllergyMismatch"],
-                                        "SmokeAllergyMismatch": v["SmokeAllergyMismatch"], 
-                                        "HoursLeftInMonth": temp[key[0]]["HoursLeftInMonth"],
-                                        "HoursLeftInWeek": temp[key[0]]["HoursLeftInWeek"],
-                                        "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract,
-                                        "DaysSinceLastVisit": DaysSinceLastVisit,
-                                        "NumberOfPreviousVisits": temp[key]["NumberOfPreviousVisits"]}
-            return pd.DataFrame(self.out).T
+                self.out[k] = {"ClientMismatch": v["ClientMismatch"],  
+                                "HoursLeftInMonth": temp[key[0]]["HoursLeftInMonth"],
+                                "HoursLeftInWeek": temp[key[0]]["HoursLeftInWeek"],
+                                "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract,
+                                "DaysSinceLastVisit": DaysSinceLastVisit,
+                                "NumberOfPreviousVisits": temp[key]["NumberOfPreviousVisits"],
+                                "EmployeeHasDogAllergy": employees[key[0]]["HasDogAllergy"],
+                                "EmployeeHasCatAllergy": employees[key[0]]["HasCatAllergy"],
+                                "EmployeeHasOtherPetsAllergy": employees[key[0]]["HasOtherPetsAllergy"],
+                                "EmployeeHasSmokeAllergy": employees[key[0]]["HasSmokeAllergy"],
+                                "RelationHasDog": relations[key[1]]["HasDog"],
+                                "RelationHasCat": relations[key[1]]["HasCat"],
+                                "RelationHasOtherPets": relations[key[1]]["HasOtherPets"],
+                                "RelationSmokes": relations[key[1]]["Smokes"]}
+            return pd.DataFrame.from_dict(self.out, orient = "index")
 
     class Availability:
 
@@ -115,13 +131,16 @@ class ComputeDataframe:
 
     def main(self):
         _self=ComputeDataframe()
-        # dist=_self.Distance(self)
-        # dist_plot=dist.get_distance_timeslots()
+        dist=_self.Distance(self)
+        print(dist.get_distance_timeslots())  
         # y=dist_plot.hist(bins=100,range=[0, 20])
         # plt.show()
-        # tsd=_self.TimeSeriesDetails(self).main()
-        avb=_self.Availability(self)
-        print(avb.past_availability())
+        # print(_self.Characteristics(self).relations[1996])
+        tsd=_self.TimeSeriesDetails(self).main()
+        print(tsd.head())
+
+        # avb=_self.Availability(self)
+        # print(avb.past_availability())
 
 if __name__=="__main__":
     df=ComputeDataframe()

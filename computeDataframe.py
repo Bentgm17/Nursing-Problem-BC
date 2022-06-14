@@ -12,7 +12,8 @@ class ComputeDataframe:
 
     def __init__(self):
         self.extract = read_db.ExtractData()
-
+        # self.df = self.extract.get_timeslots_info()
+        # self.dict = self.df.set_index('Id').to_dict(orient='index')
 
     class Characteristics:
         def __init__(self,outer_class):
@@ -110,7 +111,13 @@ class ComputeDataframe:
             self.outer_class=outer_class
 
         def past_availability(self):
-            df=self.outer_class.extract.get_data("EmployeeId,RelationId,UntilUtc","TimeSlots","where TimeSlotType=0 or TimeSlotType=1")
+            df=self.outer_class.extract.get_data("Id,EmployeeId,RelationId,UntilUtc","TimeSlots","where (TimeSlotType=0 or TimeSlotType=1)")
+            print(df)
+            df.sort_values(by=['UntilUtc'],inplace=True)
+            dct=df.to_dict(orient='index')
+            out={}
+            for k,v in tqdm(dct.items(),total=len(dct)):
+                out.setdefault(v['EmployeeId'],[]).append({'Date':v['UntilUtc'],'Day of the week':v['UntilUtc'].weekday(),'Time':v['UntilUtc'].time(),'RelationId':v['RelationId']})
             return df
 
     def main(self):

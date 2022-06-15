@@ -51,7 +51,7 @@ class ExtractData():
 
     def join_addresses(self,target):
         choice={'Employees':'EmployeeId','Relations':'RelationId'}
-        df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.{} and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0".format(target,choice[target]))
+        df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.{} and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0 and TS.FromUtc>='2020-02-07'".format(target,choice[target]))
         return df
     
     def get_timeslots_info(self):
@@ -64,13 +64,17 @@ class ExtractData():
                                                             THEN 1 ELSE 0 END AS "ClientMismatch"
                                             FROM TimeSlots AS TS, Employments as EM, EmployeeContracts as EC
                                             WHERE TS.TimeSlotType = 0 
+                                            AND TS.FromUtc > '2020-02-07'
                                             AND TS.EmployeeId = EM.EmployeeId 
                                             AND EM.Id = EC.EmploymentId 
                                             AND TS.UntilUtc >= EC.FromUtc 
                                             AND (TS.UntilUtc <= EC.UntilUtc OR EC.UntilUtc IS NULL)
                                             ORDER BY TS.UntilUtc""")
         return df
-    
+
+    def get_data(self,get_var,_from):
+        df = cx.read_sql(self.connection,"SELECT {} from dbo.{}".format(get_var,_from))
+
     def get_relation_characteristics(self):
         df = cx.read_sql(self.connection, """SELECT R.Id, 
                                                 CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 21 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasDog", 
@@ -90,7 +94,7 @@ class ExtractData():
         return df
 
     def get_data(self,get_var,_from,where=""):
-        df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {} and FromUtc >= '2020-01-01'".format(get_var,_from,where))
+        df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {} and FromUtc >= '2020-02-07'".format(get_var,_from,where))
         return df
 
 

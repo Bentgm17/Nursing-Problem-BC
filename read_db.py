@@ -51,7 +51,7 @@ class ExtractData():
 
     def join_addresses(self,target):
         choice={'Employees':'EmployeeId','Relations':'RelationId'}
-        df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.{} and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0".format(target,choice[target]))
+        df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.{} and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0 and TS.FromUtc>='2020-02-07'".format(target,choice[target]))
         return df
 
     def get_timeslots_info(self):
@@ -94,7 +94,7 @@ class ExtractData():
         return df
 
     def get_data(self,get_var,_from,where=""):
-        df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {}".format(get_var,_from,where))
+        df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {} and FromUtc >= '2020-02-07'".format(get_var,_from,where))
         return df
 
 

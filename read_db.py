@@ -94,7 +94,7 @@ class ExtractData():
         return df
 
     def get_data(self,get_var,_from,where=""):
-        df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {} and FromUtc >= '2020-02-07'".format(get_var,_from,where))
+        df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {} and TS.FromUtc >= '2020-02-07'".format(get_var,_from,where))
         return df
 
 

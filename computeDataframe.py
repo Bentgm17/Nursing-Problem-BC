@@ -1,4 +1,5 @@
 from regex import R
+from sqlalchemy import column
 import read_db
 import time
 import pgeocode
@@ -6,11 +7,13 @@ import json
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import datetime as dt
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy.stats import expon
 from scipy.stats import skewnorm
 from scipy.stats import poisson
+import random
 
 class ComputeDataframe:
 
@@ -156,27 +159,60 @@ class ComputeDataframe:
 
         def __init__(self,outer_class):
             self.outer_class=outer_class
+            self.out={}
+        '''
+        For Real life computation:
+
 
         def future_availability(self):
-            df=self.outer_class.extract.get_data("Id,EmployeeId,RelationId,UntilUtc","TimeSlots","where (TimeSlotType=0 or TimeSlotType=1) and CreatedOnUTC<=FromUtc")
-
-            df.sort_values(by=['UntilUtc'],inplace=True)
+            df=self.outer_class.extract.get_data("TS.EmployeeId,Ts.FromUtc,TS.UntilUtc,TS.CreatedOnUtc","TimeSlots TS","where (TS.TimeSlotType=0 or TS.TimeSlotType=1) and TS.CreatedOnUTC<=TS.FromUtc")
+            df.sort_values(by=['CreatedOnUtc'],inplace=True)
             dct=df.to_dict(orient='index')
             out={}
             for k,v in tqdm(dct.items(),total=len(dct)):
                 out.setdefault(v['EmployeeId'],[]).append({'Date':v['UntilUtc'],'Day of the week':v['UntilUtc'].weekday(),'Time':v['UntilUtc'].time(),'RelationId':v['RelationId']})
             return df
+        '''
+
+        def compute_availibility(self,v,employee_id):
+            if v['FromUtc'].time()<dt.time(12,00) and v['UntilUtc'].time()>dt.time(12,00): 
+                return self.out[employee_id][str(v['UntilUtc'].weekday())+"1"]*self.out[employee_id][str(v['UntilUtc'].weekday())+"2"]
+            elif v['FromUtc'].time()<dt.time(12,00):
+                return self.out[employee_id][str(v['UntilUtc'].weekday())+"1"]
+            else:
+                return self.out[employee_id][str(v['UntilUtc'].weekday())+"2"]
+
+        def refresh(self,v):
+            for employee in self.out.keys():
+                self.out[employee][str(v['UntilUtc'].weekday())+"1"]*=0.7
+                self.out[employee][str(v['UntilUtc'].weekday())+"2"]*=0.7
+        
+        def update_employee(self,v):
+            if v['FromUtc'].time()<dt.time(12,00) and v['UntilUtc'].time()>dt.time(12,00): 
+                self.out[v['EmployeeId']].update({str(v['UntilUtc'].weekday())+"1": 1, str(v['UntilUtc'].weekday())+"2": 1})
+            elif v['FromUtc'].time()<dt.time(12,00):
+                self.out[v['EmployeeId']].update({str(v['UntilUtc'].weekday())+"1": 1})
+            else:
+                self.out[v['EmployeeId']].update({str(v['UntilUtc'].weekday())+"2": 1})
 
         def past_availability(self):
-            df=self.outer_class.extract.get_data("Id,EmployeeId,RelationId,UntilUtc","TimeSlots","where (TimeSlotType=0 or TimeSlotType=1) and CreatedOnUTC<=FromUtc")
-            print(df)
+            df=self.outer_class.extract.get_data("TS.EmployeeId,Ts.FromUtc,TS.UntilUtc","TimeSlots TS","where (TS.TimeSlotType=0 or TS.TimeSlotType=1) and TS.CreatedOnUTC<=TS.FromUtc")
             df.sort_values(by=['UntilUtc'],inplace=True)
             dct=df.to_dict(orient='index')
-            out={}
-            for k,v in tqdm(dct.items(),total=len(dct)):
-                out.setdefault(v['EmployeeId'],[]).append({'Date':v['UntilUtc'],'Day of the week':v['UntilUtc'].weekday(),'Time':v['UntilUtc'].time(),'RelationId':v['RelationId']})
-            return df
-
+            for i in df['EmployeeId'].unique():
+                self.out[i]={"01":1,"02":1,"11":1,"12":1,"21":1,"22":1,"31":1,"32":1,"41":1,"42":1,'51':1,'52':1,'61':1,'62':1}
+            date=df['UntilUtc'].iloc[0].date()
+            keys=list(self.out.keys())
+            availabilities=[]
+            fake_availability=[]
+            for k,v in tqdm(dct.items(),total=len(dct)):  
+                availabilities.append(self.compute_availibility(v,v['EmployeeId']))
+                fake_availability.append(self.compute_availibility(v,random.choice(keys)))
+                if date!=v['UntilUtc'].date():
+                    self.refresh(v)
+                    date=v['UntilUtc'].date()
+                self.update_employee(v)
+            return pd.DataFrame(availabilities,columns=['Past Availability']),pd.DataFrame(fake_availability,columns=['Fake Availability'])
 
     class nonMatched:
 
@@ -185,7 +221,9 @@ class ComputeDataframe:
             self.good_distance_ratio=good_distance_ratio
 
         def create_distance(self,ratio):
-            return expon.rvs(scale=self.outerclass.train_df['Distances'].mean(), size=ratio)
+            g_distance=expon.rvs(scale=self.outerclass.train_df['Distances'].mean(), size=int((1-ratio)*len(self.outerclass.train_df)))
+            b_distance=np.random.normal(self.outerclass.train_df['Distances'].mean()+8, 2, int(ratio*len(self.outerclass.train_df)))
+            return pd.DataFrame(np.concatenate([b_distance,g_distance], axis=None),columns=['Distances'])
             
         def compute(self):
             distance=self.create_distance(int(self.good_distance_ratio*len(self.outerclass.train_df)))
@@ -236,6 +274,9 @@ class ComputeDataframe:
                     'RelationHasCat': CatRatioList, 
                     'RelationHasOtherPets': OtherPetsRatioList, 
                     'RelationSmokes': SmokesRatioList})
+            offset=0
+            distance=self.create_distance(self.good_distance_ratio)
+            offset+=int(self.good_distance_ratio*len(self.outerclass.train_df))
 
     def func(self,x, a, b, c):
         return a * np.exp(-b * x) + c
@@ -255,6 +296,14 @@ class ComputeDataframe:
         mismatched_timeslots = self.nonMatched(self).create_mismatching_timeslot_details()
         print(mismatched_timeslots)
 
+        tsd=_self.TimeSeriesDetails(self).main()
+        df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')
+        df['Label']=1
+        self.train_df=df[df['Distances']<=20]
+        non_matches=self.nonMatched(self)
+        non_matches.compute()
+        avb=_self.Availability(self)
+        real_availability,fake_availability=avb.past_availability()
 
 if __name__=="__main__":
     df=ComputeDataframe()

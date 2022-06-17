@@ -9,6 +9,8 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy.stats import expon
+from scipy.stats import skewnorm
+from scipy.stats import poisson
 
 class ComputeDataframe:
 
@@ -186,7 +188,54 @@ class ComputeDataframe:
             return expon.rvs(scale=self.outerclass.train_df['Distances'].mean(), size=ratio)
             
         def compute(self):
-           distance=self.create_distance(int(self.good_distance_ratio*len(self.outerclass.train_df)))
+            distance=self.create_distance(int(self.good_distance_ratio*len(self.outerclass.train_df)))
+
+        def create_fair_timeslot_details(self):
+            HoursLeftInMonth = self.outerclass.train_df["HoursLeftInMonth"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
+            HoursLeftInWeek = self.outerclass.train_df["HoursLeftInWeek"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
+            NumberOfMonthsLeftInContract = self.outerclass.train_df["NumberOfMonthsLeftInContract"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
+            DaysSinceLastVisit = self.outerclass.train_df["DaysSinceLastVisit"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
+            NumberOfPreviousVisits = self.outerclass.train_df["NumberOfPreviousVisits"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
+            return pd.DataFrame({"HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits})
+
+        def create_mismatching_timeslot_details(self):
+            HoursLeftInMonth = skewnorm.rvs(a = 4, loc = 0, scale = self.outerclass.train_df["HoursLeftInMonth"].std(), size = int(self.good_distance_ratio*len(self.outerclass.train_df)))
+            HoursLeftInWeek = skewnorm.rvs(a = 4, loc = 0, scale = self.outerclass.train_df["HoursLeftInWeek"].std(), size = int(self.good_distance_ratio*len(self.outerclass.train_df)))
+            NumberOfMonthsLeftInContract = expon.rvs(loc = 0, scale = self.outerclass.train_df["NumberOfMonthsLeftInContract"].std(), size = int(self.good_distance_ratio*len(self.outerclass.train_df)))
+            DaysSinceLastVisit = self.outerclass.train_df["DaysSinceLastVisit"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
+            NumberOfPreviousVisits = poisson.rvs(mu = 2, loc = 0, size = int(self.good_distance_ratio*len(self.outerclass.train_df)*0.5))
+            NumberOfPreviousVisits = np.concatenate((NumberOfPreviousVisits, np.zeros(int(self.good_distance_ratio*len(self.outerclass.train_df)*0.5))), axis = None)
+            return pd.DataFrame({"HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits})
+
+        def create_characteristic_mismatches(self):
+            DogAllergyRatio = self.outerclass.train_df['EmployeeHasDogAllergy'].mean()
+            CatAllergyRatio = self.outerclass.train_df['EmployeeHasCatAllergy'].mean()
+            OtherPetsAllergyRatio = self.outerclass.train_df['EmployeeHasOtherPetsAllergy'].mean()
+            SmokeAllergyRatio = self.outerclass.train_df['EmployeeHasSmokeAllergy'].mean()
+            DogRatio = self.outerclass.train_df['RelationHasDog'].mean()
+            CatRatio = self.outerclass.train_df['RelationHasCat'].mean()
+            OtherPetsRatio = self.outerclass.train_df['RelationHasOtherPets'].mean()
+            SmokesRatio = self.outerclass.train_df['RelationSmokes'].mean()
+
+            RatioAllergy = int((self.good_distance_ratio*len(self.outerclass.train_df) / 4))
+
+            DogAllergyList = np.concatenate((np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 3, p=[1-DogAllergyRatio, DogAllergyRatio])),axis=None)
+            DogRatioList = np.concatenate((np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 3, p=[1-DogRatio, DogRatio])),axis=None)
+            CatAllergyList = np.concatenate((np.random.choice([0,1], size=RatioAllergy, p=[1-CatAllergyRatio, CatAllergyRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 2, p=[1-CatAllergyRatio, CatAllergyRatio])),axis=None)
+            CatRatioList = np.concatenate((np.random.choice([0,1], size=RatioAllergy, p=[1-CatRatio, CatRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 2, p=[1-CatRatio, CatRatio])),axis=None)
+            OtherPetsAllergyList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 2, p=[1-OtherPetsAllergyRatio, OtherPetsAllergyRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy, p=[1-OtherPetsAllergyRatio, OtherPetsAllergyRatio])),axis=None)
+            OtherPetsRatioList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 2, p=[1-OtherPetsRatio, OtherPetsRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy, p=[1-OtherPetsRatio, OtherPetsRatio])),axis=None)
+            SmokeAllergyList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 3, p=[1-SmokeAllergyRatio, SmokeAllergyRatio]), np.ones(RatioAllergy)),axis=None)
+            SmokesRatioList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 3, p=[1-SmokesRatio, SmokesRatio]), np.ones(RatioAllergy)),axis=None)
+
+            return pd.DataFrame({'EmployeeHasDogAllergy': DogAllergyList, 
+                    'EmployeeHasCatAllergy': CatAllergyList, 
+                    'EmployeeHasOtherPetsAllergy': OtherPetsAllergyList, 
+                    'EmployeeHasSmokeAllergy': SmokeAllergyList, 
+                    'RelationHasDog': DogRatioList, 
+                    'RelationHasCat': CatRatioList, 
+                    'RelationHasOtherPets': OtherPetsRatioList, 
+                    'RelationSmokes': SmokesRatioList})
 
     def func(self,x, a, b, c):
         return a * np.exp(-b * x) + c
@@ -196,41 +245,15 @@ class ComputeDataframe:
         _self=ComputeDataframe()
         dist=_self.Distance(self)
 
-        print(dist.get_distance_timeslots())  
-        # y=dist_plot.hist(bins=100,range=[0, 20])
-        # plt.show()
-        # print(_self.Characteristics(self).relations[1996])
-        tsd=_self.TimeSeriesDetails(self).main()
-        print(tsd.head())
-
-        # avb=_self.Availability(self)
-        # print(avb.past_availability())
-
         distances=dist.get_distance_timeslots()
-        # y=distances.hist(bins=100,range=[0, 20])
-        # plt.show()
-        # n, x, _ = plt.hist(distances,bins=100,range=[0, 20])
-        # bin_centers = 0.5*(x[1:]+x[:-1])
 
-        # popt, pcov = curve_fit(self.func, bin_centers, n)
-        # print(popt)
-        # print(pcov)
-
-        # plt.plot(bin_centers, n, label='data')
-        # plt.plot(bin_centers,self.func(bin_centers, *popt), label='fit')
-        # plt.show()
         tsd=_self.TimeSeriesDetails(self).main()
         df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')
         df['Label']=1
-        print(df)
         self.train_df=df
-        non_matches=self.nonMatched(self)
-        non_matches.compute()
-        # tsd['Distance']=dist.get_distance_timeslots()
-        # print(tsd)
-        # avb=_self.Availability(self)
-        # print(avb.past_availability())
-        # print(avb.future_availability())
+
+        mismatched_timeslots = self.nonMatched(self).create_mismatching_timeslot_details()
+        print(mismatched_timeslots)
 
 
 if __name__=="__main__":

@@ -216,34 +216,69 @@ class ComputeDataframe:
 
     class nonMatched:
 
-        def __init__(self,outerclass,good_distance_ratio=0.2):
+        def __init__(self,outerclass,good_distance_ratio=0.25):
             self.outerclass=outerclass
             self.good_distance_ratio=good_distance_ratio
 
-        def create_distance(self,ratio):
-            g_distance=expon.rvs(scale=self.outerclass.train_df['Distances'].mean(), size=int((1-ratio)*len(self.outerclass.train_df)))
-            b_distance=np.random.normal(self.outerclass.train_df['Distances'].mean()+8, 2, int(ratio*len(self.outerclass.train_df)))
+        def create_distance(self):
+            g_distance=expon.rvs(scale=self.outerclass.train_df['Distances'].mean(), size=int(np.ceil((1-self.good_distance_ratio)*len(self.outerclass.train_df))))
+            b_distance=np.random.normal(self.outerclass.train_df['Distances'].mean()+8, 2, int(np.ceil(self.good_distance_ratio*len(self.outerclass.train_df))))
             return pd.DataFrame(np.concatenate([b_distance,g_distance], axis=None),columns=['Distances'])
             
         def compute(self):
-            distance=self.create_distance(int(self.good_distance_ratio*len(self.outerclass.train_df)))
+            NumberOfMismatchesPerFactor = int(self.good_distance_ratio*len(self.outerclass.train_df))
+            MaxDataLength = len(self.outerclass.train_df)
+
+            distance=self.create_distance()[:MaxDataLength]
+            ClientMismatch = self.create_client_mismatch()[:MaxDataLength]
+
+            MismatchingTimeslots = self.create_mismatching_timeslot_details()
+            MatchingTimeslots = self.create_fair_timeslot_details()
+            TimeslotsDetails = pd.concat([MatchingTimeslots[:(NumberOfMismatchesPerFactor*2)], MismatchingTimeslots, MatchingTimeslots[(NumberOfMismatchesPerFactor*2):]], ignore_index = True)[:MaxDataLength]
+
+            MismatchingCharacteristics = self.create_characteristic_mismatches()
+            MatchingCharacteristics = self.create_fair_characteristics()
+            Characteristics = pd.concat([MatchingCharacteristics, MismatchingCharacteristics], ignore_index = True)[:MaxDataLength]
+
+            return pd.concat([distance, ClientMismatch, TimeslotsDetails, Characteristics], axis = 1)
+
+
+        def create_client_mismatch(self):
+            ClientMatch1 = np.zeros(int(np.ceil((self.good_distance_ratio)*len(self.outerclass.train_df))))
+            ClientMismatch = np.ones(int(np.ceil(self.good_distance_ratio*len(self.outerclass.train_df))))
+            ClientMatch2 = np.zeros(int(np.ceil((self.good_distance_ratio*2)*len(self.outerclass.train_df))))
+            return pd.DataFrame(np.concatenate([ClientMatch1, ClientMismatch,ClientMatch2], axis=None),columns=['ClientMismatch'])
 
         def create_fair_timeslot_details(self):
-            HoursLeftInMonth = self.outerclass.train_df["HoursLeftInMonth"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
-            HoursLeftInWeek = self.outerclass.train_df["HoursLeftInWeek"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
-            NumberOfMonthsLeftInContract = self.outerclass.train_df["NumberOfMonthsLeftInContract"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
-            DaysSinceLastVisit = self.outerclass.train_df["DaysSinceLastVisit"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
-            NumberOfPreviousVisits = self.outerclass.train_df["NumberOfPreviousVisits"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
+            size = int((1-self.good_distance_ratio)*len(self.outerclass.train_df))
+            HoursLeftInMonth = self.outerclass.train_df["HoursLeftInMonth"].sample(n = size, replace = True, ignore_index = True)
+            HoursLeftInWeek = self.outerclass.train_df["HoursLeftInWeek"].sample(n = size, replace = True, ignore_index = True)
+            NumberOfMonthsLeftInContract = self.outerclass.train_df["NumberOfMonthsLeftInContract"].sample(n = size, replace = True, ignore_index = True)
+            DaysSinceLastVisit = self.outerclass.train_df["DaysSinceLastVisit"].sample(n = size, replace = True, ignore_index = True)
+            NumberOfPreviousVisits = self.outerclass.train_df["NumberOfPreviousVisits"].sample(n = size, replace = True, ignore_index = True)
             return pd.DataFrame({"HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits})
 
         def create_mismatching_timeslot_details(self):
-            HoursLeftInMonth = skewnorm.rvs(a = 4, loc = 0, scale = self.outerclass.train_df["HoursLeftInMonth"].std(), size = int(self.good_distance_ratio*len(self.outerclass.train_df)))
-            HoursLeftInWeek = skewnorm.rvs(a = 4, loc = 0, scale = self.outerclass.train_df["HoursLeftInWeek"].std(), size = int(self.good_distance_ratio*len(self.outerclass.train_df)))
-            NumberOfMonthsLeftInContract = expon.rvs(loc = 0, scale = self.outerclass.train_df["NumberOfMonthsLeftInContract"].std(), size = int(self.good_distance_ratio*len(self.outerclass.train_df)))
-            DaysSinceLastVisit = self.outerclass.train_df["DaysSinceLastVisit"].sample(n = int(self.good_distance_ratio*len(self.outerclass.train_df)), replace = True)
-            NumberOfPreviousVisits = poisson.rvs(mu = 2, loc = 0, size = int(self.good_distance_ratio*len(self.outerclass.train_df)*0.5))
-            NumberOfPreviousVisits = np.concatenate((NumberOfPreviousVisits, np.zeros(int(self.good_distance_ratio*len(self.outerclass.train_df)*0.5))), axis = None)
+            size = int(np.ceil(self.good_distance_ratio*len(self.outerclass.train_df)))
+            HoursLeftInMonth = skewnorm.rvs(a = 4, loc = 0, scale = self.outerclass.train_df["HoursLeftInMonth"].std(), size = size)
+            HoursLeftInWeek = skewnorm.rvs(a = 4, loc = 0, scale = self.outerclass.train_df["HoursLeftInWeek"].std(), size = size)
+            NumberOfMonthsLeftInContract = expon.rvs(loc = 0, scale = self.outerclass.train_df["NumberOfMonthsLeftInContract"].std(), size = size)
+            DaysSinceLastVisit = self.outerclass.train_df["DaysSinceLastVisit"].sample(n = size, replace = True, ignore_index = True)
+            NumberOfPreviousVisits = poisson.rvs(mu = 2, loc = 0, size = int(np.ceil(self.good_distance_ratio*len(self.outerclass.train_df)*0.5)))
+            NumberOfPreviousVisits = np.concatenate((NumberOfPreviousVisits, np.zeros(int(np.ceil(self.good_distance_ratio*len(self.outerclass.train_df)*0.5)))), axis = None)[:size]
             return pd.DataFrame({"HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits})
+
+        def create_fair_characteristics(self):
+            size = int(np.ceil((1-self.good_distance_ratio)*len(self.outerclass.train_df)))
+            EmployeeHasDogAllergy = self.outerclass.train_df["EmployeeHasDogAllergy"].sample(n = size, replace = True, ignore_index = True)
+            EmployeeHasCatAllergy = self.outerclass.train_df["EmployeeHasCatAllergy"].sample(n = size, replace = True, ignore_index = True)
+            EmployeeHasOtherPetsAllergy = self.outerclass.train_df["EmployeeHasOtherPetsAllergy"].sample(n = size, replace = True, ignore_index = True)
+            EmployeeHasSmokeAllergy = self.outerclass.train_df["EmployeeHasSmokeAllergy"].sample(n = size, replace = True, ignore_index = True)
+            RelationHasDog = self.outerclass.train_df["RelationHasDog"].sample(n = size, replace = True, ignore_index = True)
+            RelationHasCat = self.outerclass.train_df["RelationHasCat"].sample(n = size, replace = True, ignore_index = True)
+            RelationHasOtherPets = self.outerclass.train_df["RelationHasOtherPets"].sample(n = size, replace = True, ignore_index = True)
+            RelationSmokes = self.outerclass.train_df["RelationSmokes"].sample(n = size, replace = True, ignore_index = True)
+            return pd.DataFrame({"EmployeeHasDogAllergy": EmployeeHasDogAllergy, "EmployeeHasCatAllergy": EmployeeHasCatAllergy, "EmployeeHasOtherPetsAllergy": EmployeeHasOtherPetsAllergy, "EmployeeHasSmokeAllergy": EmployeeHasSmokeAllergy, "RelationHasDog": RelationHasDog, "RelationHasCat": RelationHasCat, "RelationHasOtherPets": RelationHasOtherPets, "RelationSmokes": RelationSmokes})
 
         def create_characteristic_mismatches(self):
             DogAllergyRatio = self.outerclass.train_df['EmployeeHasDogAllergy'].mean()
@@ -255,7 +290,7 @@ class ComputeDataframe:
             OtherPetsRatio = self.outerclass.train_df['RelationHasOtherPets'].mean()
             SmokesRatio = self.outerclass.train_df['RelationSmokes'].mean()
 
-            RatioAllergy = int((self.good_distance_ratio*len(self.outerclass.train_df) / 4))
+            RatioAllergy = int(np.ceil(self.good_distance_ratio*len(self.outerclass.train_df) / 4))
 
             DogAllergyList = np.concatenate((np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 3, p=[1-DogAllergyRatio, DogAllergyRatio])),axis=None)
             DogRatioList = np.concatenate((np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 3, p=[1-DogRatio, DogRatio])),axis=None)
@@ -291,22 +326,18 @@ class ComputeDataframe:
         tsd=_self.TimeSeriesDetails(self).main()
         df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')
         df['Label']=1
-        self.train_df=df
-
-        mismatched_timeslots = self.nonMatched(self).create_mismatching_timeslot_details()
-        print(mismatched_timeslots)
-
-        tsd=_self.TimeSeriesDetails(self).main()
-        df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')
-        df['Label']=1
         self.train_df=df[df['Distances']<=20]
+
         non_matches=self.nonMatched(self)
-        non_matches.compute()
+        generated_data = non_matches.compute()
+
         avb=_self.Availability(self)
         real_availability,fake_availability=avb.past_availability()
+
+        generated_data = pd.concat([generated_data, fake_availability.sample(n = generated_data.shape[0], ignore_index = True)], axis = 1)
+        generated_data['Label']=0
+        print(generated_data)
 
 if __name__=="__main__":
     df=ComputeDataframe()
     df.main()
-
-

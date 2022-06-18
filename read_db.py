@@ -3,7 +3,7 @@ from unicodedata import name
 import pyodbc
 import pandas as pd
 # import mysql.connector
-import pymysql.cursors
+# import pymysql.cursors
 import connectorx as cx
 from dateutil.relativedelta import relativedelta
 import datetime as dt
@@ -53,7 +53,7 @@ class ExtractData():
         choice={'Employees':'EmployeeId','Relations':'RelationId'}
         df=cx.read_sql(self.connection,"SELECT TS.Id,AD.ZipCode from dbo.{} as EMP, dbo.Addresses as AD, TimeSlots as TS where EMP.id=TS.{} and EMP.VisitAddressId=AD.Id and TS.TimeSlotType=0 and TS.FromUtc>='2020-02-07'".format(target,choice[target]))
         return df
-    
+
     def get_timeslots_info(self):
         df = cx.read_sql(self.connection,"""SELECT DISTINCT TS.Id, TS.EmployeeID, TS.RelationID, TS.FromUtc, TS.UntilUtc, EC.FromUtc as ContractFrom, EC.UntilUtc as ContractUntil, EC.AverageNumberOfHoursPerMonth, EC.NumberOfHoursPerWeek, 
                                             CASE WHEN EXISTS(SELECT * 
@@ -100,5 +100,3 @@ class ExtractData():
 
     def close_conn(self):
         self.conn.close()
-
-

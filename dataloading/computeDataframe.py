@@ -1,10 +1,8 @@
 from matplotlib.style import available
 from regex import R
 from sqlalchemy import column
-import read_db
-import time
+import dataloading.read_db as read_db
 import pgeocode
-import json
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -19,11 +17,10 @@ import math
 
 class ComputeDataframe:
 
-    def __init__(self):
-        self.extract = read_db.ExtractData()
+    def __init__(self,source):
+        self.source=source
+        self.extract = read_db.ExtractData(self.source)
         self.train_df=None
-        # self.df = self.extract.get_timeslots_info()
-        # self.dict = self.df.set_index('Id').to_dict(orient='index')
 
     class Characteristics:
         def __init__(self,outer_class):
@@ -41,10 +38,6 @@ class ComputeDataframe:
             df = self.outer_class.extract.get_relation_characteristics()
             relations = df.set_index('Id').to_dict(orient='index')
             return relations
-
-            self.outer_class=outer_class
-            self.employees =self.set_employee_dict()
-            self.relations =self.set_relation_dict()
 
         def set_employee_dict(self):
             df = self.outer_class.extract.get_employee_characteristics()
@@ -162,19 +155,6 @@ class ComputeDataframe:
         def __init__(self,outer_class):
             self.outer_class=outer_class
             self.out={}
-        '''
-        For Real life computation:
-
-
-        def future_availability(self):
-            df=self.outer_class.extract.get_data("TS.EmployeeId,Ts.FromUtc,TS.UntilUtc,TS.CreatedOnUtc","TimeSlots TS","where (TS.TimeSlotType=0 or TS.TimeSlotType=1) and TS.CreatedOnUTC<=TS.FromUtc")
-            df.sort_values(by=['CreatedOnUtc'],inplace=True)
-            dct=df.to_dict(orient='index')
-            out={}
-            for k,v in tqdm(dct.items(),total=len(dct)):
-                out.setdefault(v['EmployeeId'],[]).append({'Date':v['UntilUtc'],'Day of the week':v['UntilUtc'].weekday(),'Time':v['UntilUtc'].time(),'RelationId':v['RelationId']})
-            return df
-        '''
 
         def compute_availibility(self,v,employee_id):
             if v['FromUtc'].time()<dt.time(12,00) and v['UntilUtc'].time()>dt.time(12,00): 
@@ -209,8 +189,6 @@ class ComputeDataframe:
             fake_availability=[]
             for k,v in tqdm(dct.items(),total=len(dct)):  
                 availability=self.compute_availibility(v,v['EmployeeId'])
-                # if math.isnan(availability):
-                #     print('here')
                 availabilities[v['Id']]=availability
                 fake_availability.append(self.compute_availibility(v,random.choice(keys)))
                 if date!=v['UntilUtc'].date():
@@ -314,37 +292,24 @@ class ComputeDataframe:
                     'RelationHasCat': CatRatioList, 
                     'RelationHasOtherPets': OtherPetsRatioList, 
                     'RelationSmokes': SmokesRatioList})
-            offset=0
-            distance=self.create_distance(self.good_distance_ratio)
-            offset+=int(self.good_distance_ratio*len(self.outerclass.train_df))
 
     def func(self,x, a, b, c):
         return a * np.exp(-b * x) + c
 
-
-    def main(self):
-        _self=ComputeDataframe()
+    def main(self,PATH):
+        _self=ComputeDataframe(self.source)
         dist=_self.Distance(self)
-
         distances=dist.get_distance_timeslots()
-
         tsd=_self.TimeSeriesDetails(self).main()
-        df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')
+        df=tsd.merge(distances, how='inner', left_index=True, right_on='Id')
         avb=_self.Availability(self)
         real_availability,fake_availability=avb.past_availability()
-        print(real_availability.head())
-        print(df.head())
         df=pd.merge(df, real_availability, left_index=True, right_index=True)
         df['Label']=1
         self.train_df=df[df['Distances']<=20]
-
         non_matches=self.nonMatched(self)
         generated_data = non_matches.compute()        
         generated_data['Availability']=fake_availability.sample(n = generated_data.shape[0], ignore_index = True)
         generated_data['Label']=0
         self.train_df=pd.concat([self.train_df, generated_data])
-        self.train_df.to_csv('train_df.csv')
-
-if __name__=="__main__":
-    df=ComputeDataframe()
-    df.main()
+        self.train_df.to_csv(PATH)

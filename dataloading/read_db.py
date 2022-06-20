@@ -29,7 +29,7 @@ class ExtractData():
     data_on_matchid(player_id,args)
         Generates the property link
     """
-    def __init__(self):
+    def __init__(self,source):
         """
         Parameters
         ----------
@@ -38,12 +38,7 @@ class ExtractData():
         adress : str
             a formatted string which represents the related adress
         """
-        self.conn = pyodbc.connect(server='127.0.0.1,1401',
-                                        driver='{ODBC Driver 17 for SQL Server}',
-                                        database='qpz-florein-prod_bu_20220414-ANONYMOUS',
-                                        user='SA',
-                                        password='Assist2022')
-        self.connection="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS"
+        self.connection=source
     
     def get_adres(self,_from):
         df = cx.read_sql(self.connection,"SELECT AD.ZipCode from dbo.{} as ITB, dbo.Addresses as AD where AD.Id=ITB.VisitAddressId".format(_from,id))
@@ -96,7 +91,3 @@ class ExtractData():
     def get_data(self,get_var,_from,where=""):
         df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {} and TS.FromUtc >= '2020-02-07'".format(get_var,_from,where))
         return df
-
-
-    def close_conn(self):
-        self.conn.close()

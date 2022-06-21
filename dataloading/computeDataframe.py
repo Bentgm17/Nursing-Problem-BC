@@ -252,10 +252,27 @@ class ComputeDataframe:
     def func(self,x, a, b, c):
         return a * np.exp(-b * x) + c
 
+
+    def main(self): 
+        _self=ComputeDataframe()
+
     def main(self,PATH):
         _self=ComputeDataframe(self.source)
         dist=_self.Distance(self)
         distances=dist.get_distance_timeslots()
+        plt.hist(distances, bins=100,range=[0,20])
+        plt.show()
+
+        tsd=_self.TimeSeriesDetails(self).main()
+        df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')
+        df['Label']=1
+        self.train_df=df[df['Distances']<=20]
+
+        print(self.train_df.head())
+
+        non_matches=self.nonMatched(self)
+        generated_data = non_matches.compute()
+
         tsd=_self.TimeSeriesDetails(self).main()
         df=tsd.merge(distances, how='inner', left_index=True, right_on='Id')
         avb=_self.Availability(self)

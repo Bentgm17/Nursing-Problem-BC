@@ -67,6 +67,62 @@ class ExtractData():
                                             ORDER BY TS.UntilUtc""")
         return df
 
+    def retrieve_zipcodes(self):
+        df = cx.read_sql(self.connection, """SELECT X.EmployeeZipCode, Y.RelationZipCode
+                                                FROM (SELECT DISTINCT AD.ZipCodeNumberPart as RelationZipCode
+                                                        FROM Relations as R, Addresses as AD
+                                                        WHERE R.VisitAddressId IS NOT NULL
+                                                        AND AD.ZipCodeNumberPart IS NOT NULL
+                                                        AND R.VisitAddressId = AD.Id) as Y, 
+                                                    (SELECT DISTINCT AD.ZipCodeNumberPart as EmployeeZipCode
+                                                        FROM Employees as E, Addresses as AD
+                                                        WHERE AD.ZipCodeNumberPart IS NOT NULL
+                                                        AND E.VisitAddressId IS NOT NULL
+                                                        AND E.VisitAddressId = AD.Id
+                                                        AND (E.EmployementEndDateUtc >= '2020-02-07' OR E.EmployementEndDateUtc IS NULL)) as X""")
+        return df
+
+    def retrieve_employee_data(self):
+        df = cx.read_sql(self.connection,"""SELECT E.Id as EmployeeId, AD.ZipCodeNumberPart as EmployeeZipCode, EC.NumberOfHoursPerWeek, EC.AverageNumberOfHoursPerMonth, EC.FromUtc as ContractFrom, EC.UntilUtc as ContractUntil, 
+                                                    CASE WHEN EXISTS (SELECT * FROM EmployeeCharacteristics AS EmCh WHERE EmCh.CharacteristicId = 2 AND EmCh.EmployeeId = E.Id) THEN 1 ELSE 0 END AS "HasDogAllergy", 
+                                                    CASE WHEN EXISTS (SELECT * FROM EmployeeCharacteristics AS EmCh WHERE EmCh.CharacteristicId = 3 AND EmCh.EmployeeId = E.Id) THEN 1 ELSE 0 END AS "HasCatAllergy", 
+                                                    CASE WHEN EXISTS (SELECT * FROM EmployeeCharacteristics AS EmCh WHERE EmCh.CharacteristicId = 4 AND EmCh.EmployeeId = E.Id) THEN 1 ELSE 0 END AS "HasOtherPetsAllergy", 
+                                                    CASE WHEN EXISTS (SELECT * FROM EmployeeCharacteristics AS EmCh WHERE EmCh.CharacteristicId = 5 AND EmCh.EmployeeId = E.Id) THEN 1 ELSE 0 END AS "HasSmokeAllergy"
+                                                FROM Employees as E, Addresses as AD, Employments as EM, EmployeeContracts as EC
+                                                WHERE E.VisitAddressId IS NOT NULL
+                                                AND AD.ZipCodeNumberPart IS NOT NULL
+                                                AND E.VisitAddressId = AD.Id
+                                                AND E.Id = EM.EmployeeId
+                                                AND EM.Id = EC.EmploymentId
+                                                AND EC.UntilUtc >= '2020-02-07'""")
+        return df
+
+    def retrieve_historical_timeslot_data(self):
+        df = cx.read_sql(self.connection,"""SELECT DISTINCT TS.Id, TS.EmployeeID, TS.RelationID, TS.FromUtc, TS.UntilUtc, AD.ZipCodeNumberPart, DATEDIFF(minute, TS.FromUtc, TS.UntilUtc) as TimeSlotLength,
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 21 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasDog", 
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 27 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasCat", 
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 33 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasOtherPets", 
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 37 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "Smokes"
+                                                FROM TimeSlots AS TS, Relations as R, Addresses as AD
+                                                WHERE TS.TimeSlotType = 0 
+                                                AND TS.FromUtc > '2020-02-07'
+                                                AND TS.RelationId = R.Id
+                                                AND R.VisitAddressId IS NOT NULL
+                                                AND AD.ZipCodeNumberPart IS NOT NULL
+                                                AND R.VisitAddressId = AD.Id
+                                                ORDER BY TS.UntilUtc""")
+        return df
+
+    def retrieve_smaller_historical_timeslot_data(self):
+        df = cx.read_sql(self.connection, "")
+        return df
+
+    def retrieve_client_mismatches(self):
+        df = cx.read_sql(self.connection, """SELECT DISTINCT IERC.EmployeeId, IERC.RelationId, IERC.CreatedOnUTC
+                                                FROM InvalidEmployeeRelationCombinations AS IERC
+                                                ORDER BY IERC.CreatedOnUTC""")
+        return df
+
     def get_data(self,get_var,_from):
         df = cx.read_sql(self.connection,"SELECT {} from dbo.{}".format(get_var,_from))
 

@@ -322,6 +322,8 @@ class ComputeDataframe:
         dist=_self.Distance(self)
 
         distances=dist.get_distance_timeslots()
+        plt.hist(distances, bins=100,range=[0,20])
+        plt.show()
 
         tsd=_self.TimeSeriesDetails(self).main()
         df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')

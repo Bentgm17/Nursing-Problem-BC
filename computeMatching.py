@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import pgeocode
 from tqdm import tqdm
+from time import time
 
 class computeMatching:
     def __init__(self):
@@ -29,6 +30,8 @@ class computeMatching:
         EmployeeData = EmployeeData.to_dict(orient="index")
         TimeSlotData = self.extract.retrieve_historical_timeslot_data()
         TimeSlotData = TimeSlotData.set_index("Id").to_dict(orient="index")
+        PreviousMatches = {}
+
         ClientMismatches = {}
         ClientMismatchExtract = self.extract.retrieve_client_mismatches()
         for k, v in ClientMismatchExtract.to_dict(orient = "index").items():
@@ -36,13 +39,13 @@ class computeMatching:
         distance_dict = self.computeDistanceDict()
 
         for TS_k, TS_v in tqdm(TimeSlotData.items(), total = len(TimeSlotData)):
-            for E_k, E_v in EmployeeData.values():
+            for E_k, E_v in EmployeeData.items():
                 if ((TS_v["UntilUtc"] >= E_v["ContractFrom"]) and (TS_v["UntilUtc"] <= E_v["ContractUntil"])):
                     if (TS_v["ZipCodeNumberPart"], E_v["EmployeeZipCode"]) in distance_dict:
-                        Distance = distance_dict[TS_v["ZipCodeNumberPart"], E_v["EmployeeZipCode"]]
+                        Distances = distance_dict[TS_v["ZipCodeNumberPart"], E_v["EmployeeZipCode"]]
                     else: 
-                        Distance = self.dist.query_postal_code(str(TS_v["ZipCodeNumberPart"]), str(E_v["EmployeeZipCode"]))
-                        distance_dict[TS_v["ZipCodeNumberPart"], E_v["EmployeeZipCode"]] = Distance
+                        Distances = self.dist.query_postal_code(str(TS_v["ZipCodeNumberPart"]), str(E_v["EmployeeZipCode"]))
+                        distance_dict[TS_v["ZipCodeNumberPart"], E_v["EmployeeZipCode"]] = Distances
                     
                     if (E_v["EmployeeId"], TS_v["RelationID"]) in ClientMismatches:
                         if ClientMismatches[E_v["EmployeeId"], TS_v["RelationID"]] <= TS_v["UntilUtc"]:
@@ -52,18 +55,42 @@ class computeMatching:
                     else: 
                         ClientMismatch = 1
 
-                    NumberOfMonthsLeftInContract = (E_v["ContractUntil"] - TS_v["UntilUtc"]).days / 30
-                    previous_visits = [element_v["UntilUtc"] for element_k, element_v in TimeSlotData.items() if ((TS_v["UntilUtc"] > element_v["UntilUtc"]) and (TS_v["RelationID"] == element_v["RelationID"]) and (TS_v["EmployeeID"] == element_v["EmployeeID"]))]
-                    NumberOfPreviousVisits = len(previous_visits)
-                    if (NumberOfPreviousVisits == 0):
+                    if (E_v["EmployeeId"], TS_v["RelationID"]) in PreviousMatches:
+                        PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["Count"] += 1
+                        DaysSinceLastVisit = (TS_v["UntilUtc"] - PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"]).days
+                        PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"] = TS_v["UntilUtc"]
+                    else: 
+                        PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]] = {"Count": 0, "DateLastVisited": TS_v["UntilUtc"]}
                         DaysSinceLastVisit = 0
-                    else:
-                        DaysSinceLastVisit = (TS_v["UntilUtc"] - max(previous_visits)).days
+
+                    NumberOfMonthsLeftInContract = (E_v["ContractUntil"] - TS_v["UntilUtc"]).days / 30
+                    NumberOfPreviousVisits = PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["Count"]
+                    
+                    if E_v["EmployeeId"] in PreviousMatches:
+                        if TS_v["UntilUtc"].year == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].year:
+                            if TS_v["UntilUtc"].month == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].month:
+                                PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] -= TS_v["TimeSlotLength"]/60
+                            else:
+                                PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] = E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60
+                            if TS_v["UntilUtc"].isocalendar().week == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].isocalendar().week:
+                                PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] -= TS_v["TimeSlotLength"]/60
+                            else: 
+                                PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] = E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60
+                        else:
+                            PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] = E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60
+                            PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] = E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60
+                    else: 
+                        PreviousMatches[E_v["EmployeeId"]] = {"DateLastVisited": TS_v["UntilUtc"], "HoursLeftInMonth": E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60, "HoursLeftInWeek": E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60}
+                    
+                    HoursLeftInMonth = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"]
+                    HoursLeftInWeek = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"]
+                    
                     DogAllergyMismatch = min(TS_v["HasDog"], E_v["HasDogAllergy"])
                     CatAllergyMismatch = min(TS_v["HasCat"], E_v["HasCatAllergy"])
                     OtherPetsAllergyMismatch = min(TS_v["HasOtherPets"], E_v["HasOtherPetsAllergy"])
                     SmokeAllergyMismatch = min(TS_v["Smokes"], E_v["HasSmokeAllergy"])
-                    dict[TS_k, E_v["EmployeeId"]] = {"Distance": Distance, "DogAllergyMismatch": DogAllergyMismatch, "CatAllergyMismatch": CatAllergyMismatch, "OtherPetsAllergyMismatch": OtherPetsAllergyMismatch, "SmokeAllergyMismatch": SmokeAllergyMismatch}
+                    
+                    dict[TS_k, E_v["EmployeeId"]] = {"ClientMismatch": ClientMismatch, "HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits, "Distances": Distances, "DogAllergyMismatch": DogAllergyMismatch, "CatAllergyMismatch": CatAllergyMismatch, "OtherPetsAllergyMismatch": OtherPetsAllergyMismatch, "SmokeAllergyMismatch": SmokeAllergyMismatch}
                 else: 
                     continue
         return dict

@@ -1,4 +1,4 @@
-import read_db
+import dataloading.read_db
 import numpy as np
 import pandas as pd
 import pgeocode
@@ -6,8 +6,8 @@ from tqdm import tqdm
 from time import time
 
 class computeMatching:
-    def __init__(self):
-        self.extract = read_db.ExtractData()
+    def __init__(self,source):
+        self.extract = dataloading.read_db.ExtractData(source)
         self.dist = pgeocode.GeoDistance('NL')
 
     def computeDistanceDict(self):
@@ -31,6 +31,10 @@ class computeMatching:
         TimeSlotData = self.extract.retrieve_historical_timeslot_data()
         TimeSlotData = TimeSlotData.set_index("Id").to_dict(orient="index")
         PreviousMatches = {}
+        # Availability = {}
+        # for k, v in EmployeeData.items():
+        #     Availability[v["EmployeeId"]] = {"01":1,"02":1,"11":1,"12":1,"21":1,"22":1,"31":1,"32":1,"41":1,"42":1,'51':1,'52':1,'61':1,'62':1}
+        # date = 0
 
         ClientMismatches = {}
         ClientMismatchExtract = self.extract.retrieve_client_mismatches()
@@ -40,7 +44,12 @@ class computeMatching:
 
         for TS_k, TS_v in tqdm(TimeSlotData.items(), total = len(TimeSlotData)):
             for E_k, E_v in EmployeeData.items():
-                if ((TS_v["UntilUtc"] >= E_v["ContractFrom"]) and (TS_v["UntilUtc"] <= E_v["ContractUntil"])):
+                # if date != TS_v["UntilUtc"].date():
+                #     for key in Availability:
+                #         Availability[key][str(TS_v['UntilUtc'].weekday())]
+                #     date = TS_v["UntilUtc"].date()
+
+                if ((TS_v["UntilUtc"] >= E_v["ContractFrom"]) and ((TS_v["UntilUtc"] <= E_v["ContractUntil"]) or (E_v["ContractUntil"] is None))):
                     if (TS_v["ZipCodeNumberPart"], E_v["EmployeeZipCode"]) in distance_dict:
                         Distances = distance_dict[TS_v["ZipCodeNumberPart"], E_v["EmployeeZipCode"]]
                     else: 
@@ -89,12 +98,14 @@ class computeMatching:
                     CatAllergyMismatch = min(TS_v["HasCat"], E_v["HasCatAllergy"])
                     OtherPetsAllergyMismatch = min(TS_v["HasOtherPets"], E_v["HasOtherPetsAllergy"])
                     SmokeAllergyMismatch = min(TS_v["Smokes"], E_v["HasSmokeAllergy"])
-                    
-                    dict[TS_k, E_v["EmployeeId"]] = {"ClientMismatch": ClientMismatch, "HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits, "Distances": Distances, "DogAllergyMismatch": DogAllergyMismatch, "CatAllergyMismatch": CatAllergyMismatch, "OtherPetsAllergyMismatch": OtherPetsAllergyMismatch, "SmokeAllergyMismatch": SmokeAllergyMismatch}
+                    AllergyMismatch = max(DogAllergyMismatch, CatAllergyMismatch, OtherPetsAllergyMismatch, SmokeAllergyMismatch)
+   
+                    dict[TS_k, E_v["EmployeeId"]] = {"ClientMismatch": ClientMismatch, "HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits, "Distances": Distances, "AllergyMismatch": AllergyMismatch}
                 else: 
                     continue
-        return dict
+        return pd.DataFrame(dict).T
 
 if __name__=="__main__":
-    Matching=computeMatching()
-    print(Matching.main())
+    Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
+    df = Matching.main()
+    df.to_csv("C:/Users/niels/Desktop/Niels/Colleges/'21-'22 BA/Project Business Case/Business Case/test.csv")

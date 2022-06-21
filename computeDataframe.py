@@ -317,7 +317,7 @@ class ComputeDataframe:
         return a * np.exp(-b * x) + c
 
 
-    def main(self):
+    def main(self): 
         _self=ComputeDataframe()
         dist=_self.Distance(self)
 
@@ -327,6 +327,8 @@ class ComputeDataframe:
         df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')
         df['Label']=1
         self.train_df=df[df['Distances']<=20]
+
+        print(self.train_df.head())
 
         non_matches=self.nonMatched(self)
         generated_data = non_matches.compute()

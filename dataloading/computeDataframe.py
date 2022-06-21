@@ -1,7 +1,7 @@
 from matplotlib.style import available
 from regex import R
 from sqlalchemy import column
-import dataloading.read_db as read_db
+import read_db as read_db
 import pgeocode
 import numpy as np
 import pandas as pd
@@ -14,6 +14,7 @@ from scipy.stats import skewnorm
 from scipy.stats import poisson
 import random
 import math
+import os
 
 class ComputeDataframe:
 
@@ -133,6 +134,11 @@ class ComputeDataframe:
                 ## Calculate the number of months left in the contract
                 NumberOfMonthsLeftInContract = (v["ContractUntil"] - v["UntilUtc"]).days/30
 
+                allergy_mismatch=(np.nansum([employees[key[0]]["HasDogAllergy"]/relations[key[1]]["HasDog"] if relations[key[1]]["HasDog"] else 0,
+                                      employees[key[0]]["HasCatAllergy"]/relations[key[1]]["HasCat"] if relations[key[1]]["HasCat"] else 0,
+                                      employees[key[0]]["HasOtherPetsAllergy"]/relations[key[1]]["HasOtherPets"] if relations[key[1]]["HasOtherPets"] else 0,
+                                      employees[key[0]]["HasSmokeAllergy"]/relations[key[1]]["Smokes"] if relations[key[1]]["Smokes"] else 0]) != 0)
+
                 ## Save all calculated variables in self.dict
                 self.out[k] = {"ClientMismatch": v["ClientMismatch"],  
                                 "HoursLeftInMonth": temp[key[0]]["HoursLeftInMonth"],
@@ -140,14 +146,7 @@ class ComputeDataframe:
                                 "NumberOfMonthsLeftInContract": 24 if math.isnan(NumberOfMonthsLeftInContract) else NumberOfMonthsLeftInContract,
                                 "DaysSinceLastVisit": DaysSinceLastVisit,
                                 "NumberOfPreviousVisits": temp[key]["NumberOfPreviousVisits"],
-                                "EmployeeHasDogAllergy": employees[key[0]]["HasDogAllergy"],
-                                "EmployeeHasCatAllergy": employees[key[0]]["HasCatAllergy"],
-                                "EmployeeHasOtherPetsAllergy": employees[key[0]]["HasOtherPetsAllergy"],
-                                "EmployeeHasSmokeAllergy": employees[key[0]]["HasSmokeAllergy"],
-                                "RelationHasDog": relations[key[1]]["HasDog"],
-                                "RelationHasCat": relations[key[1]]["HasCat"],
-                                "RelationHasOtherPets": relations[key[1]]["HasOtherPets"],
-                                "RelationSmokes": relations[key[1]]["Smokes"]}
+                                "Allergymismatch":int(allergy_mismatch)}
             return pd.DataFrame.from_dict(self.out, orient = "index")
 
     class Availability:
@@ -219,9 +218,8 @@ class ComputeDataframe:
             MatchingTimeslots = self.create_fair_timeslot_details()
             TimeslotsDetails = pd.concat([MatchingTimeslots[:(NumberOfMismatchesPerFactor*2)], MismatchingTimeslots, MatchingTimeslots[(NumberOfMismatchesPerFactor*2):]], ignore_index = True)[:MaxDataLength]
 
-            MismatchingCharacteristics = self.create_characteristic_mismatches()
-            MatchingCharacteristics = self.create_fair_characteristics()
-            Characteristics = pd.concat([MatchingCharacteristics, MismatchingCharacteristics], ignore_index = True)[:MaxDataLength]
+            Characteristics=pd.DataFrame(0, index=np.arange(MaxDataLength), columns=['Allergymismatch'])
+            Characteristics.loc[0.75*MaxDataLength:,'Allergymismatch']=1
 
             return pd.concat([distance, ClientMismatch, TimeslotsDetails, Characteristics], axis = 1)
 
@@ -251,48 +249,6 @@ class ComputeDataframe:
             NumberOfPreviousVisits = np.concatenate((NumberOfPreviousVisits, np.zeros(int(np.ceil(self.good_distance_ratio*len(self.outerclass.train_df)*0.5)))), axis = None)[:size]
             return pd.DataFrame({"HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits})
 
-        def create_fair_characteristics(self):
-            size = int(np.ceil((1-self.good_distance_ratio)*len(self.outerclass.train_df)))
-            EmployeeHasDogAllergy = self.outerclass.train_df["EmployeeHasDogAllergy"].sample(n = size, replace = True, ignore_index = True)
-            EmployeeHasCatAllergy = self.outerclass.train_df["EmployeeHasCatAllergy"].sample(n = size, replace = True, ignore_index = True)
-            EmployeeHasOtherPetsAllergy = self.outerclass.train_df["EmployeeHasOtherPetsAllergy"].sample(n = size, replace = True, ignore_index = True)
-            EmployeeHasSmokeAllergy = self.outerclass.train_df["EmployeeHasSmokeAllergy"].sample(n = size, replace = True, ignore_index = True)
-            RelationHasDog = self.outerclass.train_df["RelationHasDog"].sample(n = size, replace = True, ignore_index = True)
-            RelationHasCat = self.outerclass.train_df["RelationHasCat"].sample(n = size, replace = True, ignore_index = True)
-            RelationHasOtherPets = self.outerclass.train_df["RelationHasOtherPets"].sample(n = size, replace = True, ignore_index = True)
-            RelationSmokes = self.outerclass.train_df["RelationSmokes"].sample(n = size, replace = True, ignore_index = True)
-            return pd.DataFrame({"EmployeeHasDogAllergy": EmployeeHasDogAllergy, "EmployeeHasCatAllergy": EmployeeHasCatAllergy, "EmployeeHasOtherPetsAllergy": EmployeeHasOtherPetsAllergy, "EmployeeHasSmokeAllergy": EmployeeHasSmokeAllergy, "RelationHasDog": RelationHasDog, "RelationHasCat": RelationHasCat, "RelationHasOtherPets": RelationHasOtherPets, "RelationSmokes": RelationSmokes})
-
-        def create_characteristic_mismatches(self):
-            DogAllergyRatio = self.outerclass.train_df['EmployeeHasDogAllergy'].mean()
-            CatAllergyRatio = self.outerclass.train_df['EmployeeHasCatAllergy'].mean()
-            OtherPetsAllergyRatio = self.outerclass.train_df['EmployeeHasOtherPetsAllergy'].mean()
-            SmokeAllergyRatio = self.outerclass.train_df['EmployeeHasSmokeAllergy'].mean()
-            DogRatio = self.outerclass.train_df['RelationHasDog'].mean()
-            CatRatio = self.outerclass.train_df['RelationHasCat'].mean()
-            OtherPetsRatio = self.outerclass.train_df['RelationHasOtherPets'].mean()
-            SmokesRatio = self.outerclass.train_df['RelationSmokes'].mean()
-
-            RatioAllergy = int(np.ceil(self.good_distance_ratio*len(self.outerclass.train_df) / 4))
-
-            DogAllergyList = np.concatenate((np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 3, p=[1-DogAllergyRatio, DogAllergyRatio])),axis=None)
-            DogRatioList = np.concatenate((np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 3, p=[1-DogRatio, DogRatio])),axis=None)
-            CatAllergyList = np.concatenate((np.random.choice([0,1], size=RatioAllergy, p=[1-CatAllergyRatio, CatAllergyRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 2, p=[1-CatAllergyRatio, CatAllergyRatio])),axis=None)
-            CatRatioList = np.concatenate((np.random.choice([0,1], size=RatioAllergy, p=[1-CatRatio, CatRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 2, p=[1-CatRatio, CatRatio])),axis=None)
-            OtherPetsAllergyList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 2, p=[1-OtherPetsAllergyRatio, OtherPetsAllergyRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy, p=[1-OtherPetsAllergyRatio, OtherPetsAllergyRatio])),axis=None)
-            OtherPetsRatioList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 2, p=[1-OtherPetsRatio, OtherPetsRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy, p=[1-OtherPetsRatio, OtherPetsRatio])),axis=None)
-            SmokeAllergyList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 3, p=[1-SmokeAllergyRatio, SmokeAllergyRatio]), np.ones(RatioAllergy)),axis=None)
-            SmokesRatioList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 3, p=[1-SmokesRatio, SmokesRatio]), np.ones(RatioAllergy)),axis=None)
-
-            return pd.DataFrame({'EmployeeHasDogAllergy': DogAllergyList, 
-                    'EmployeeHasCatAllergy': CatAllergyList, 
-                    'EmployeeHasOtherPetsAllergy': OtherPetsAllergyList, 
-                    'EmployeeHasSmokeAllergy': SmokeAllergyList, 
-                    'RelationHasDog': DogRatioList, 
-                    'RelationHasCat': CatRatioList, 
-                    'RelationHasOtherPets': OtherPetsRatioList, 
-                    'RelationSmokes': SmokesRatioList})
-
     def func(self,x, a, b, c):
         return a * np.exp(-b * x) + c
 
@@ -313,3 +269,8 @@ class ComputeDataframe:
         generated_data['Label']=0
         self.train_df=pd.concat([self.train_df, generated_data])
         self.train_df.to_csv(PATH)
+
+if __name__=="__main__":
+    CURRENT_DIR=os.path.dirname(os.path.abspath(__file__))
+    df=ComputeDataframe(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
+    df.main('dataloading.train_df.csv')

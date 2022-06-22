@@ -29,13 +29,13 @@ class computeMatching:
         dict = {}
         EmployeeData = self.extract.retrieve_employee_data()
         EmployeeData = EmployeeData.to_dict(orient="index")
-        TimeSlotData = self.extract.retrieve_historical_timeslot_data()
+        TimeSlotData = self.extract.retrieve_timeslot_data()
         TimeSlotData = TimeSlotData.set_index("Id").to_dict(orient="index")
         PreviousMatches = {}
         Availability = {}
         for k, v in EmployeeData.items():
             Availability[v["EmployeeId"]] = {"01":1,"02":1,"11":1,"12":1,"21":1,"22":1,"31":1,"32":1,"41":1,"42":1,'51':1,'52':1,'61':1,'62':1}
-        date = 0
+        date = next(iter(TimeSlotData.items()))[1]["UntilUtc"].date()
 
         ClientMismatches = {}
         ClientMismatchExtract = self.extract.retrieve_client_mismatches()
@@ -80,16 +80,27 @@ class computeMatching:
                     else: 
                         ClientMismatch = 0
 
-                    if (E_v["EmployeeId"], TS_v["RelationID"]) in PreviousMatches:
-                        PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["Count"] += 1
-                        DaysSinceLastVisit = (TS_v["UntilUtc"] - PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"]).days
-                        PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"] = TS_v["UntilUtc"]
+                    if E_v["EmployeeId"] == TS_v["EmployeeID"]:
+                        if (E_v["EmployeeId"], TS_v["RelationID"]) in PreviousMatches:
+                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["Count"] += 1
+                            DaysSinceLastVisit = (TS_v["UntilUtc"] - PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"]).days
+                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"] = TS_v["UntilUtc"]
+                        else: 
+                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]] = {"Count": 0, "DateLastVisited": TS_v["UntilUtc"]}
+                            DaysSinceLastVisit = 0
+                        NumberOfMonthsLeftInContract = (E_v["ContractUntil"] - TS_v["UntilUtc"]).days / 30
+                        NumberOfPreviousVisits = PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["Count"]
                     else: 
-                        PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]] = {"Count": 0, "DateLastVisited": TS_v["UntilUtc"]}
-                        DaysSinceLastVisit = 0
+                        if (E_v["EmployeeId"], TS_v["RelationID"]) in PreviousMatches:
+                            NumberOfPreviousVisits = PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["Count"] + 1
+                            DaysSinceLastVisit = (TS_v["UntilUtc"] - PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"]).days
+                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"] = TS_v["UntilUtc"]
+                        else: 
+                            NumberOfPreviousVisits = 0
+                            DaysSinceLastVisit = 0
+                        NumberOfMonthsLeftInContract = (E_v["ContractUntil"] - TS_v["UntilUtc"]).days / 30
 
-                    NumberOfMonthsLeftInContract = (E_v["ContractUntil"] - TS_v["UntilUtc"]).days / 30
-                    NumberOfPreviousVisits = PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["Count"]
+
 
                     if E_v["EmployeeId"] in PreviousMatches:
                         if E_v["EmployeeId"] == TS_v["EmployeeID"]:
@@ -152,5 +163,7 @@ class computeMatching:
         return pd.DataFrame(dict).T
 
 if __name__=="__main__":
-    Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
+    # Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
+    Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod-2022-6-17-15-25-ANONYMOUS")
     df = Matching.main()
+    df.to_csv("C:/Users/niels/Desktop/Niels/Colleges/'21-'22 BA/Project Business Case/Business Case/test.csv")

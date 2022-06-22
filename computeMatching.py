@@ -5,6 +5,9 @@ import pgeocode
 import datetime as dt
 from tqdm import tqdm
 from time import time
+import json
+import dateutil
+from ast import literal_eval
 
 class computeMatching:
     def __init__(self,source):
@@ -25,16 +28,32 @@ class computeMatching:
     def computeMatchProbability(self):
         return None
 
+    def read_jsons(self):
+        VisitsJson = open("dataloading\TimeSlotDetails-2022-05-01.json", "r")
+        AvailabilityJson = open("dataloading\Availabilities-2022-05-01.json", "r")
+        EmployeeHoursJson = open("dataloading\EmployeeDetails-2022-05-01.json", "r")
+        VisitsDict = {}
+        AvailabilityDict = json.load(AvailabilityJson)
+        for k, v in json.load(VisitsJson).items():
+            k_0,k_1=literal_eval(k)
+            VisitsDict[k_0, k_1] = v
+            VisitsDict[k_0,k_1]["DateOfLastVisit"] = dateutil.parser.parse(VisitsDict[k_0,k_1]["DateOfLastVisit"])
+
+        for k, v in json.load(EmployeeHoursJson).items():
+            VisitsDict[int(k)] = v
+            VisitsDict[int(k)]["DateOfLastVisit"] = dateutil.parser.parse(VisitsDict[int(k)]["DateOfLastVisit"])
+        return VisitsDict, AvailabilityDict
+
     def main(self): 
         dict = {}
-        EmployeeData = self.extract.retrieve_timeslot_data()
+        EmployeeData = self.extract.retrieve_employee_data()
         EmployeeData = EmployeeData.to_dict(orient="index")
         TimeSlotData = self.extract.retrieve_timeslot_data()
         TimeSlotData = TimeSlotData.set_index("Id").to_dict(orient="index")
-        PreviousMatches = {}
-        Availability = {}
+        PreviousMatches, Availability = self.read_jsons()
         for k, v in EmployeeData.items():
-            Availability[v["EmployeeId"]] = {"01":1,"02":1,"11":1,"12":1,"21":1,"22":1,"31":1,"32":1,"41":1,"42":1,'51':1,'52':1,'61':1,'62':1}
+            if v["EmployeeId"] not in Availability:
+                Availability[v["EmployeeId"]] = {"01":1,"02":1,"11":1,"12":1,"21":1,"22":1,"31":1,"32":1,"41":1,"42":1,'51':1,'52':1,'61':1,'62':1}
         date = next(iter(TimeSlotData.items()))[1]["UntilUtc"].date()
 
         ClientMismatches = {}
@@ -43,7 +62,10 @@ class computeMatching:
             ClientMismatches[v["EmployeeId"], v["RelationId"]] = v["CreatedOnUTC"]
         distance_dict = self.computeDistanceDict()
 
+        counter = 0
+
         for TS_k, TS_v in tqdm(TimeSlotData.items(), total = len(TimeSlotData)):
+            counter += 1
             for E_k, E_v in EmployeeData.items(): 
                 if date != TS_v["UntilUtc"].date():
                     for key in Availability:
@@ -79,36 +101,34 @@ class computeMatching:
 
                     if E_v["EmployeeId"] == TS_v["EmployeeID"]:
                         if (E_v["EmployeeId"], TS_v["RelationID"]) in PreviousMatches:
-                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["Count"] += 1
-                            DaysSinceLastVisit = (TS_v["UntilUtc"] - PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"]).days
-                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"] = TS_v["UntilUtc"]
+                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["NumberOfPreviousVisits"] += 1
+                            DaysSinceLastVisit = (TS_v["UntilUtc"] - PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateOfLastVisit"]).days
+                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateOfLastVisit"] = TS_v["UntilUtc"]
                         else: 
-                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]] = {"Count": 0, "DateLastVisited": TS_v["UntilUtc"]}
+                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]] = {"NumberOfPreviousVisits": 0, "DateOfLastVisit": TS_v["UntilUtc"]}
                             DaysSinceLastVisit = 0
                         NumberOfMonthsLeftInContract = (E_v["ContractUntil"] - TS_v["UntilUtc"]).days / 30
-                        NumberOfPreviousVisits = PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["Count"]
+                        NumberOfPreviousVisits = PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["NumberOfPreviousVisits"]
                     else: 
                         if (E_v["EmployeeId"], TS_v["RelationID"]) in PreviousMatches:
-                            NumberOfPreviousVisits = PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["Count"] + 1
-                            DaysSinceLastVisit = (TS_v["UntilUtc"] - PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"]).days
-                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateLastVisited"] = TS_v["UntilUtc"]
+                            NumberOfPreviousVisits = PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["NumberOfPreviousVisits"] + 1
+                            DaysSinceLastVisit = (TS_v["UntilUtc"] - PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateOfLastVisit"]).days
+                            PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["DateOfLastVisit"] = TS_v["UntilUtc"]
                         else: 
                             NumberOfPreviousVisits = 0
                             DaysSinceLastVisit = 0
                         NumberOfMonthsLeftInContract = (E_v["ContractUntil"] - TS_v["UntilUtc"]).days / 30
 
-
-
                     if E_v["EmployeeId"] in PreviousMatches:
                         if E_v["EmployeeId"] == TS_v["EmployeeID"]:
-                            if TS_v["UntilUtc"].year == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].year:
-                                if TS_v["UntilUtc"].month == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].month:
+                            if TS_v["UntilUtc"].year == PreviousMatches[E_v["EmployeeId"]]["DateOfLastVisit"].year:
+                                if TS_v["UntilUtc"].month == PreviousMatches[E_v["EmployeeId"]]["DateOfLastVisit"].month:
                                     PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] -= TS_v["TimeSlotLength"]/60
                                     HoursLeftInMonth = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"]
                                 else:
                                     PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] = E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60
                                     HoursLeftInMonth = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"]
-                                if TS_v["UntilUtc"].isocalendar().week == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].isocalendar().week:
+                                if TS_v["UntilUtc"].isocalendar().week == PreviousMatches[E_v["EmployeeId"]]["DateOfLastVisit"].isocalendar().week:
                                     PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] -= TS_v["TimeSlotLength"]/60
                                     HoursLeftInWeek = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"]
                                 else: 
@@ -120,12 +140,12 @@ class computeMatching:
                                 PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] = E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60
                                 HoursLeftInWeek = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"]
                         else:
-                            if TS_v["UntilUtc"].year == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].year:
-                                if TS_v["UntilUtc"].month == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].month:
+                            if TS_v["UntilUtc"].year == PreviousMatches[E_v["EmployeeId"]]["DateOfLastVisit"].year:
+                                if TS_v["UntilUtc"].month == PreviousMatches[E_v["EmployeeId"]]["DateOfLastVisit"].month:
                                     HoursLeftInMonth = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] - TS_v["TimeSlotLength"]/60
                                 else:
                                     HoursLeftInMonth = E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60
-                                if TS_v["UntilUtc"].isocalendar().week == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].isocalendar().week:
+                                if TS_v["UntilUtc"].isocalendar().week == PreviousMatches[E_v["EmployeeId"]]["DateOfLastVisit"].isocalendar().week:
                                     HoursLeftInWeek = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] - TS_v["TimeSlotLength"]/60
                                 else: 
                                     HoursLeftInWeek = E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60
@@ -134,7 +154,7 @@ class computeMatching:
                                 HoursLeftInWeek = E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60
                     else: 
                         if E_v["EmployeeId"] == TS_v["EmployeeID"]:
-                            PreviousMatches[E_v["EmployeeId"]] = {"DateLastVisited": TS_v["UntilUtc"], "HoursLeftInMonth": E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60, "HoursLeftInWeek": E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60}
+                            PreviousMatches[E_v["EmployeeId"]] = {"DateOfLastVisit": TS_v["UntilUtc"], "HoursLeftInMonth": E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60, "HoursLeftInWeek": E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60}
                             HoursLeftInMonth = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"]
                             HoursLeftInWeek = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"]
                         else: 
@@ -155,6 +175,8 @@ class computeMatching:
                     dict[TS_k, E_v["EmployeeId"]] = {"ClientMismatch": ClientMismatch, "HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits, "AllergyMismatch": AllergyMismatch, "Distances": Distances, "Availability": AvailabilityOutput, "Label": Label}
                 else: 
                     continue
+            if counter >= 1000:
+                break
         return pd.DataFrame(dict).T
 
 if __name__=="__main__":

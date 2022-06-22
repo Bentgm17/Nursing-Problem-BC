@@ -94,43 +94,44 @@ class ComputeDataframe:
             return employees, relations
 
         def main(self,save=False):
-            temp = {}
+            tempE = {}
+            tempER = {}
             dict = self.outer_class.extract.get_timeslots_info()
             dict = dict.set_index('Id').to_dict(orient='index')
             employees, relations = self.retrieve_characteristics()
 
             for k,v in tqdm(dict.items(),total=len(dict)):
-                key = v["EmployeeID"], v["RelationID"]
+                key = int(v["EmployeeID"]), int(v["RelationID"])
 
                 ## Calculate the remaining availability in each calendar month and week
                 appointmentLength = (v["UntilUtc"] - v["FromUtc"]).total_seconds()/3600
-                if key[0] in temp:
-                    if temp[key[0]]["DateLastWorked"].year == v["FromUtc"].year:
-                        if temp[key[0]]["DateLastWorked"].month == v["FromUtc"].month:
-                            temp[key[0]]["HoursLeftInMonth"] = temp[key[0]]["HoursLeftInMonth"] - appointmentLength
+                if key[0] in tempE:
+                    if tempE[key[0]]["DateOfLastVisit"].year == v["FromUtc"].year:
+                        if tempE[key[0]]["DateOfLastVisit"].month == v["FromUtc"].month:
+                            tempE[key[0]]["HoursLeftInMonth"] = tempE[key[0]]["HoursLeftInMonth"] - appointmentLength
                         else: 
-                            temp[key[0]]["HoursLeftInMonth"] = v["AverageNumberOfHoursPerMonth"] - appointmentLength
-                        if temp[key[0]]["DateLastWorked"].isocalendar().week == v["FromUtc"].isocalendar().week:
-                            temp[key[0]]["HoursLeftInWeek"] = temp[key[0]]["HoursLeftInWeek"] - appointmentLength
+                            tempE[key[0]]["HoursLeftInMonth"] = v["AverageNumberOfHoursPerMonth"] - appointmentLength
+                        if tempE[key[0]]["DateOfLastVisit"].isocalendar().week == v["FromUtc"].isocalendar().week:
+                            tempE[key[0]]["HoursLeftInWeek"] = tempE[key[0]]["HoursLeftInWeek"] - appointmentLength
                         else: 
-                            temp[key[0]]["HoursLeftInWeek"] = v["NumberOfHoursPerWeek"] - appointmentLength
+                            tempE[key[0]]["HoursLeftInWeek"] = v["NumberOfHoursPerWeek"] - appointmentLength
                     else: 
-                        temp[key[0]]["HoursLeftInMonth"] = v["AverageNumberOfHoursPerMonth"] - appointmentLength
-                        temp[key[0]]["HoursLeftInWeek"] = v["NumberOfHoursPerWeek"] - appointmentLength
-                    temp[key[0]]["DateLastWorked"] = v["UntilUtc"]
+                        tempE[key[0]]["HoursLeftInMonth"] = v["AverageNumberOfHoursPerMonth"] - appointmentLength
+                        tempE[key[0]]["HoursLeftInWeek"] = v["NumberOfHoursPerWeek"] - appointmentLength
+                    tempE[key[0]]["DateOfLastVisit"] = v["UntilUtc"]
                 else:
-                    temp[key[0]] = {"HoursLeftInMonth": v["AverageNumberOfHoursPerMonth"] - appointmentLength, 
+                    tempE[key[0]] = {"HoursLeftInMonth": v["AverageNumberOfHoursPerMonth"] - appointmentLength, 
                                     "HoursLeftInWeek": v["NumberOfHoursPerWeek"] - appointmentLength,
-                                    "DateLastWorked": v["FromUtc"]}
+                                    "DateOfLastVisit": v["FromUtc"]}
 
                 ## Calculate the days since last visit and the total number of visits
-                if key in temp:
-                    DaysSinceLastVisit = (v["UntilUtc"] - temp[key]["DateOfLastVisit"]).days
-                    temp[key]["DateOfLastVisit"] = v["UntilUtc"] 
-                    temp[key]["NumberOfPreviousVisits"] += 1
+                if key in tempER:
+                    DaysSinceLastVisit = (v["UntilUtc"] - tempER[key]["DateOfLastVisit"]).days
+                    tempER[key]["DateOfLastVisit"] = v["UntilUtc"]
+                    tempER[key]["NumberOfPreviousVisits"] += 1
                 else:
                     DaysSinceLastVisit = 0
-                    temp[key] = {"DateOfLastVisit": v["UntilUtc"], "NumberOfPreviousVisits": 0}
+                    tempER[key] = {"DateOfLastVisit": v["UntilUtc"], "NumberOfPreviousVisits": 0}
 
                 ## Calculate the number of months left in the contract
                 NumberOfMonthsLeftInContract = (v["ContractUntil"] - v["UntilUtc"]).days/30
@@ -142,19 +143,29 @@ class ComputeDataframe:
 
                 ## Save all calculated variables in self.dict
                 self.out[k] = {"ClientMismatch": v["ClientMismatch"],  
-                                "HoursLeftInMonth": temp[key[0]]["HoursLeftInMonth"],
-                                "HoursLeftInWeek": temp[key[0]]["HoursLeftInWeek"],
+                                "HoursLeftInMonth": tempE[key[0]]["HoursLeftInMonth"],
+                                "HoursLeftInWeek": tempE[key[0]]["HoursLeftInWeek"],
                                 "NumberOfMonthsLeftInContract": 24 if math.isnan(NumberOfMonthsLeftInContract) else NumberOfMonthsLeftInContract,
                                 "DaysSinceLastVisit": DaysSinceLastVisit,
-                                "NumberOfPreviousVisits": temp[key]["NumberOfPreviousVisits"],
+                                "NumberOfPreviousVisits": tempER[key]["NumberOfPreviousVisits"],
                                 "Allergymismatch":int(allergy_mismatch)}
             if save:
+                temp_output = {}
+                for k, v in tqdm(tempE.items(), total = len(tempE)):
+                    temp_output[str(k)] = tempE[k]
+                    temp_output[str(k)]["DateOfLastVisit"] = temp_output[str(k)]["DateOfLastVisit"].isoformat()
+                with open("EmployeeDetails-2022-05-01.json", "w") as outfile:
+                    json.dump(temp_output, outfile)
+                
+                temp_output = {}
+                for k, v in tqdm(tempER.items(), total = len(tempER)):
+                    temp_output[str(k)] = tempER[k]
+                    temp_output[str(k)]["DateOfLastVisit"] = temp_output[str(k)]["DateOfLastVisit"].isoformat()
                 with open("TimeSlotDetails-2022-05-01.json", "w") as outfile:
-                    json.dump(self.out, outfile)
+                    json.dump(temp_output, outfile)
             return pd.DataFrame.from_dict(self.out, orient = "index")
 
     class Availability:
-
         def __init__(self,outer_class):
             self.outer_class=outer_class
             self.out={}
@@ -230,7 +241,6 @@ class ComputeDataframe:
 
             return pd.concat([distance, ClientMismatch, TimeslotsDetails, Characteristics], axis = 1)
 
-
         def create_client_mismatch(self):
             ClientMatch1 = np.zeros(int(np.ceil((self.good_distance_ratio)*len(self.outerclass.train_df))))
             ClientMismatch = np.ones(int(np.ceil(self.good_distance_ratio*len(self.outerclass.train_df))))
@@ -269,14 +279,8 @@ class ComputeDataframe:
         distances=dist.get_distance_timeslots()
         tsd=_self.TimeSeriesDetails(self).main()
         df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')
-        df['Label']=1
-        self.train_df=df[df['Distances']<=20]
-
-        non_matches=self.nonMatched(self)
-        generated_data = non_matches.compute()
-
-        tsd=_self.TimeSeriesDetails(self).main()
-        df=tsd.merge(distances, how='inner', left_index=True, right_on='Id')
+        df.index.map(lambda x:str(x))
+        df.set_index('Id')
         avb=_self.Availability(self)
         real_availability,fake_availability=avb.past_availability()
         df=pd.merge(df, real_availability, left_index=True, right_index=True)

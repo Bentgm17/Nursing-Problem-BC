@@ -43,7 +43,10 @@ class computeMatching:
             ClientMismatches[v["EmployeeId"], v["RelationId"]] = v["CreatedOnUTC"]
         distance_dict = self.computeDistanceDict()
 
+        counter = 0
+
         for TS_k, TS_v in tqdm(TimeSlotData.items(), total = len(TimeSlotData)):
+            counter += 1
             for E_k, E_v in EmployeeData.items(): 
                 if date != TS_v["UntilUtc"].date():
                     for key in Availability:
@@ -51,13 +54,14 @@ class computeMatching:
                         Availability[key][str(TS_v['UntilUtc'].weekday()) + "2"] *= 0.7
                     date = TS_v["UntilUtc"].date()
 
-                if TS_v['FromUtc'].time()<dt.time(12,00) and TS_v['UntilUtc'].time()>dt.time(12,00): 
-                    Availability[E_v['EmployeeId']][str(TS_v['UntilUtc'].weekday())+"1"] = 1
-                    Availability[E_v['EmployeeId']][str(TS_v['UntilUtc'].weekday())+"2"] = 1
-                elif TS_v['FromUtc'].time()<dt.time(12,00):
-                    Availability[E_v['EmployeeId']][str(TS_v['UntilUtc'].weekday())+"1"] = 1
-                else:
-                    Availability[E_v['EmployeeId']][str(TS_v['UntilUtc'].weekday())+"2"] = 1
+                if TS_v["EmployeeID"] == E_v["EmployeeId"]:
+                    if TS_v['FromUtc'].time()<dt.time(12,00) and TS_v['UntilUtc'].time()>dt.time(12,00): 
+                        Availability[E_v['EmployeeId']][str(TS_v['UntilUtc'].weekday())+"1"] = 1
+                        Availability[E_v['EmployeeId']][str(TS_v['UntilUtc'].weekday())+"2"] = 1
+                    elif TS_v['FromUtc'].time()<dt.time(12,00):
+                        Availability[E_v['EmployeeId']][str(TS_v['UntilUtc'].weekday())+"1"] = 1
+                    else:
+                        Availability[E_v['EmployeeId']][str(TS_v['UntilUtc'].weekday())+"2"] = 1
 
                 if TS_v['FromUtc'].time()<dt.time(12,00):
                     AvailabilityOutput = Availability[E_v["EmployeeId"]][str(TS_v["UntilUtc"].weekday()) + "1"]
@@ -87,27 +91,47 @@ class computeMatching:
                     NumberOfMonthsLeftInContract = (E_v["ContractUntil"] - TS_v["UntilUtc"]).days / 30
                     NumberOfPreviousVisits = PreviousMatches[E_v["EmployeeId"], TS_v["RelationID"]]["Count"]
 
-                    """
-                    Dit gedeelte hieronder werkt nog niet helemaal goed. Als we dit verder gaan gebruiken moet dit nog aangepast worden.
-                    """
                     if E_v["EmployeeId"] in PreviousMatches:
-                        if TS_v["UntilUtc"].year == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].year:
-                            if TS_v["UntilUtc"].month == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].month:
-                                PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] -= TS_v["TimeSlotLength"]/60
+                        if E_v["EmployeeId"] == TS_v["EmployeeID"]:
+                            if TS_v["UntilUtc"].year == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].year:
+                                if TS_v["UntilUtc"].month == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].month:
+                                    PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] -= TS_v["TimeSlotLength"]/60
+                                    HoursLeftInMonth = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"]
+                                else:
+                                    PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] = E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60
+                                    HoursLeftInMonth = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"]
+                                if TS_v["UntilUtc"].isocalendar().week == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].isocalendar().week:
+                                    PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] -= TS_v["TimeSlotLength"]/60
+                                    HoursLeftInWeek = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"]
+                                else: 
+                                    PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] = E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60
+                                    HoursLeftInWeek = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"]
                             else:
                                 PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] = E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60
-                            if TS_v["UntilUtc"].isocalendar().week == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].isocalendar().week:
-                                PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] -= TS_v["TimeSlotLength"]/60
-                            else: 
+                                HoursLeftInMonth = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"]
                                 PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] = E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60
+                                HoursLeftInWeek = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"]
                         else:
-                            PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] = E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60
-                            PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] = E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60
+                            if TS_v["UntilUtc"].year == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].year:
+                                if TS_v["UntilUtc"].month == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].month:
+                                    HoursLeftInMonth = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"] - TS_v["TimeSlotLength"]/60
+                                else:
+                                    HoursLeftInMonth = E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60
+                                if TS_v["UntilUtc"].isocalendar().week == PreviousMatches[E_v["EmployeeId"]]["DateLastVisited"].isocalendar().week:
+                                    HoursLeftInWeek = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"] - TS_v["TimeSlotLength"]/60
+                                else: 
+                                    HoursLeftInWeek = E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60
+                            else:
+                                HoursLeftInMonth = E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60
+                                HoursLeftInWeek = E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60
                     else: 
-                        PreviousMatches[E_v["EmployeeId"]] = {"DateLastVisited": TS_v["UntilUtc"], "HoursLeftInMonth": E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60, "HoursLeftInWeek": E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60}
-                    
-                    HoursLeftInMonth = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"]
-                    HoursLeftInWeek = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"]
+                        if E_v["EmployeeId"] == TS_v["EmployeeID"]:
+                            PreviousMatches[E_v["EmployeeId"]] = {"DateLastVisited": TS_v["UntilUtc"], "HoursLeftInMonth": E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60, "HoursLeftInWeek": E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60}
+                            HoursLeftInMonth = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInMonth"]
+                            HoursLeftInWeek = PreviousMatches[E_v["EmployeeId"]]["HoursLeftInWeek"]
+                        else: 
+                            HoursLeftInMonth = E_v["AverageNumberOfHoursPerMonth"] - TS_v["TimeSlotLength"]/60
+                            HoursLeftInWeek = E_v["NumberOfHoursPerWeek"] - TS_v["TimeSlotLength"]/60
                     
                     DogAllergyMismatch = min(TS_v["HasDog"], E_v["HasDogAllergy"])
                     CatAllergyMismatch = min(TS_v["HasCat"], E_v["HasCatAllergy"])
@@ -123,9 +147,10 @@ class computeMatching:
                     dict[TS_k, E_v["EmployeeId"]] = {"ClientMismatch": ClientMismatch, "HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits, "AllergyMismatch": AllergyMismatch, "Distances": Distances, "Availability": AvailabilityOutput, "Label": Label}
                 else: 
                     continue
+            if counter >= 1000:
+                break
         return pd.DataFrame(dict).T
 
 if __name__=="__main__":
     Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
     df = Matching.main()
-    df.to_csv("C:/Users/niels/Desktop/Niels/Colleges/'21-'22 BA/Project Business Case/Business Case/test.csv")

@@ -15,6 +15,7 @@ from scipy.stats import poisson
 import random
 import math
 import os
+import json 
 
 class ComputeDataframe:
 
@@ -92,7 +93,7 @@ class ComputeDataframe:
 
             return employees, relations
 
-        def main(self):
+        def main(self,save=False):
             temp = {}
             dict = self.outer_class.extract.get_timeslots_info()
             dict = dict.set_index('Id').to_dict(orient='index')
@@ -147,6 +148,9 @@ class ComputeDataframe:
                                 "DaysSinceLastVisit": DaysSinceLastVisit,
                                 "NumberOfPreviousVisits": temp[key]["NumberOfPreviousVisits"],
                                 "Allergymismatch":int(allergy_mismatch)}
+            if save:
+                with open("TimeSlotDetails-2022-05-01.json", "w") as outfile:
+                    json.dump(self.out, outfile)
             return pd.DataFrame.from_dict(self.out, orient = "index")
 
     class Availability:
@@ -157,43 +161,46 @@ class ComputeDataframe:
 
         def compute_availibility(self,v,employee_id):
             if v['FromUtc'].time()<dt.time(12,00) and v['UntilUtc'].time()>dt.time(12,00): 
-                return self.out[employee_id][str(v['UntilUtc'].weekday())+"1"]*self.out[employee_id][str(v['UntilUtc'].weekday())+"2"]
+                return self.out[str(employee_id)][str(v['UntilUtc'].weekday())+"1"]*self.out[str(employee_id)][str(v['UntilUtc'].weekday())+"2"]
             elif v['FromUtc'].time()<dt.time(12,00):
-                return self.out[employee_id][str(v['UntilUtc'].weekday())+"1"]
+                return self.out[str(employee_id)][str(v['UntilUtc'].weekday())+"1"]
             else:
-                return self.out[employee_id][str(v['UntilUtc'].weekday())+"2"]
+                return self.out[str(employee_id)][str(v['UntilUtc'].weekday())+"2"]
 
         def refresh(self,v):
             for employee in self.out.keys():
-                self.out[employee][str(v['UntilUtc'].weekday())+"1"]*=0.7
-                self.out[employee][str(v['UntilUtc'].weekday())+"2"]*=0.7
+                self.out[str(employee)][str(v['UntilUtc'].weekday())+"1"]*=0.7
+                self.out[str(employee)][str(v['UntilUtc'].weekday())+"2"]*=0.7
         
         def update_employee(self,v):
             if v['FromUtc'].time()<dt.time(12,00) and v['UntilUtc'].time()>dt.time(12,00): 
-                self.out[v['EmployeeId']].update({str(v['UntilUtc'].weekday())+"1": 1, str(v['UntilUtc'].weekday())+"2": 1})
+                self.out[str(v['EmployeeId'])].update({str(v['UntilUtc'].weekday())+"1": 1, str(v['UntilUtc'].weekday())+"2": 1})
             elif v['FromUtc'].time()<dt.time(12,00):
-                self.out[v['EmployeeId']].update({str(v['UntilUtc'].weekday())+"1": 1})
+                self.out[str(v['EmployeeId'])].update({str(v['UntilUtc'].weekday())+"1": 1})
             else:
-                self.out[v['EmployeeId']].update({str(v['UntilUtc'].weekday())+"2": 1})
+                self.out[str(v['EmployeeId'])].update({str(v['UntilUtc'].weekday())+"2": 1})
 
-        def past_availability(self):
+        def past_availability(self,save=False):
             df=self.outer_class.extract.get_data("TS.Id,TS.EmployeeId,Ts.FromUtc,TS.UntilUtc","TimeSlots TS","where (TS.TimeSlotType=0 or TS.TimeSlotType=1) and TS.CreatedOnUTC<=TS.FromUtc")
             df.sort_values(by=['UntilUtc'],inplace=True)
             dct=df.to_dict(orient='index')
             for i in df['EmployeeId'].unique():
-                self.out[i]={"01":1,"02":1,"11":1,"12":1,"21":1,"22":1,"31":1,"32":1,"41":1,"42":1,'51':1,'52':1,'61':1,'62':1}
+                self.out[str(i)]={"01":1,"02":1,"11":1,"12":1,"21":1,"22":1,"31":1,"32":1,"41":1,"42":1,'51':1,'52':1,'61':1,'62':1}
             date=df['UntilUtc'].iloc[0].date()
             keys=list(self.out.keys())
             availabilities={}
             fake_availability=[]
             for k,v in tqdm(dct.items(),total=len(dct)):  
                 availability=self.compute_availibility(v,v['EmployeeId'])
-                availabilities[v['Id']]=availability
+                availabilities[str(v['Id'])]=availability
                 fake_availability.append(self.compute_availibility(v,random.choice(keys)))
                 if date!=v['UntilUtc'].date():
                     self.refresh(v)
                     date=v['UntilUtc'].date()
                 self.update_employee(v)
+            if save:
+                with open("Availabilities-2022-05-01.json", "w") as outfile:
+                    json.dump(self.out, outfile)
             return pd.Series(availabilities,name='Availability'),pd.DataFrame(fake_availability)
 
     class nonMatched:
@@ -260,15 +267,10 @@ class ComputeDataframe:
         _self=ComputeDataframe(self.source)
         dist=_self.Distance(self)
         distances=dist.get_distance_timeslots()
-        plt.hist(distances, bins=100,range=[0,20])
-        plt.show()
-
         tsd=_self.TimeSeriesDetails(self).main()
         df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')
         df['Label']=1
         self.train_df=df[df['Distances']<=20]
-
-        print(self.train_df.head())
 
         non_matches=self.nonMatched(self)
         generated_data = non_matches.compute()

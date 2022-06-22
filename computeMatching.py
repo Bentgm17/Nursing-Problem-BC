@@ -27,7 +27,7 @@ class computeMatching:
 
     def main(self): 
         dict = {}
-        EmployeeData = self.extract.retrieve_employee_data()
+        EmployeeData = self.extract.retrieve_timeslot_data()
         EmployeeData = EmployeeData.to_dict(orient="index")
         TimeSlotData = self.extract.retrieve_historical_timeslot_data()
         TimeSlotData = TimeSlotData.set_index("Id").to_dict(orient="index")
@@ -42,7 +42,6 @@ class computeMatching:
         for k, v in ClientMismatchExtract.to_dict(orient = "index").items():
             ClientMismatches[v["EmployeeId"], v["RelationId"]] = v["CreatedOnUTC"]
         distance_dict = self.computeDistanceDict()
-
         for TS_k, TS_v in tqdm(TimeSlotData.items(), total = len(TimeSlotData)):
             for E_k, E_v in EmployeeData.items(): 
                 if date != TS_v["UntilUtc"].date():
@@ -126,6 +125,7 @@ class computeMatching:
         return pd.DataFrame(dict).T
 
 if __name__=="__main__":
-    Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
+    # Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
+    Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod-2022-6-17-15-25-ANONYMOUS")
     df = Matching.main()
     df.to_csv("C:/Users/niels/Desktop/Niels/Colleges/'21-'22 BA/Project Business Case/Business Case/test.csv")

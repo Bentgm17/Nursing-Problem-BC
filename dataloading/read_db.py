@@ -113,8 +113,22 @@ class ExtractData():
                                                 ORDER BY TS.UntilUtc""")
         return df
 
-    def retrieve_smaller_historical_timeslot_data(self):
-        df = cx.read_sql(self.connection, "")
+    def retrieve_timeslot_data(self):
+        df = cx.read_sql(self.connection, """SELECT DISTINCT TS.Id, TS.EmployeeID, TS.RelationID, TS.FromUtc, TS.UntilUtc, AD.ZipCodeNumberPart, DATEDIFF(minute, TS.FromUtc, TS.UntilUtc) as TimeSlotLength,
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 21 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasDog", 
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 27 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasCat", 
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 33 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasOtherPets", 
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 37 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "Smokes"
+                                                FROM TimeSlots AS TS, Relations as R, Addresses as AD
+                                                WHERE TS.TimeSlotType = 0 
+                                                AND TS.RecurringTimeSlotDefinitionId IS NULL
+                                                AND TS.FromUtc > '2022-05-01'
+                                                AND TS.UntilUtc < '2023-01-01'
+                                                AND TS.RelationId = R.Id
+                                                AND R.VisitAddressId IS NOT NULL
+                                                AND AD.ZipCodeNumberPart IS NOT NULL
+                                                AND R.VisitAddressId = AD.Id
+                                                ORDER BY TS.UntilUtc""")
         return df
 
     def retrieve_client_mismatches(self):

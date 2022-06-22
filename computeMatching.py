@@ -27,7 +27,7 @@ class computeMatching:
 
     def main(self): 
         dict = {}
-        EmployeeData = self.extract.retrieve_employee_data()
+        EmployeeData = self.extract.retrieve_timeslot_data()
         EmployeeData = EmployeeData.to_dict(orient="index")
         TimeSlotData = self.extract.retrieve_timeslot_data()
         TimeSlotData = TimeSlotData.set_index("Id").to_dict(orient="index")
@@ -43,10 +43,7 @@ class computeMatching:
             ClientMismatches[v["EmployeeId"], v["RelationId"]] = v["CreatedOnUTC"]
         distance_dict = self.computeDistanceDict()
 
-        counter = 0
-
         for TS_k, TS_v in tqdm(TimeSlotData.items(), total = len(TimeSlotData)):
-            counter += 1
             for E_k, E_v in EmployeeData.items(): 
                 if date != TS_v["UntilUtc"].date():
                     for key in Availability:
@@ -158,8 +155,6 @@ class computeMatching:
                     dict[TS_k, E_v["EmployeeId"]] = {"ClientMismatch": ClientMismatch, "HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits, "AllergyMismatch": AllergyMismatch, "Distances": Distances, "Availability": AvailabilityOutput, "Label": Label}
                 else: 
                     continue
-            if counter >= 1000:
-                break
         return pd.DataFrame(dict).T
 
 if __name__=="__main__":

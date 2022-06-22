@@ -1,7 +1,7 @@
 from matplotlib.style import available
 from regex import R
 from sqlalchemy import column
-import dataloading.read_db as read_db
+import read_db as read_db
 import pgeocode
 import numpy as np
 import pandas as pd
@@ -14,6 +14,8 @@ from scipy.stats import skewnorm
 from scipy.stats import poisson
 import random
 import math
+import os
+import json 
 
 class ComputeDataframe:
 
@@ -91,7 +93,7 @@ class ComputeDataframe:
 
             return employees, relations
 
-        def main(self):
+        def main(self,save=False):
             temp = {}
             dict = self.outer_class.extract.get_timeslots_info()
             dict = dict.set_index('Id').to_dict(orient='index')
@@ -133,6 +135,11 @@ class ComputeDataframe:
                 ## Calculate the number of months left in the contract
                 NumberOfMonthsLeftInContract = (v["ContractUntil"] - v["UntilUtc"]).days/30
 
+                allergy_mismatch=(np.nansum([employees[key[0]]["HasDogAllergy"]/relations[key[1]]["HasDog"] if relations[key[1]]["HasDog"] else 0,
+                                      employees[key[0]]["HasCatAllergy"]/relations[key[1]]["HasCat"] if relations[key[1]]["HasCat"] else 0,
+                                      employees[key[0]]["HasOtherPetsAllergy"]/relations[key[1]]["HasOtherPets"] if relations[key[1]]["HasOtherPets"] else 0,
+                                      employees[key[0]]["HasSmokeAllergy"]/relations[key[1]]["Smokes"] if relations[key[1]]["Smokes"] else 0]) != 0)
+
                 ## Save all calculated variables in self.dict
                 self.out[k] = {"ClientMismatch": v["ClientMismatch"],  
                                 "HoursLeftInMonth": temp[key[0]]["HoursLeftInMonth"],
@@ -140,14 +147,10 @@ class ComputeDataframe:
                                 "NumberOfMonthsLeftInContract": 24 if math.isnan(NumberOfMonthsLeftInContract) else NumberOfMonthsLeftInContract,
                                 "DaysSinceLastVisit": DaysSinceLastVisit,
                                 "NumberOfPreviousVisits": temp[key]["NumberOfPreviousVisits"],
-                                "EmployeeHasDogAllergy": employees[key[0]]["HasDogAllergy"],
-                                "EmployeeHasCatAllergy": employees[key[0]]["HasCatAllergy"],
-                                "EmployeeHasOtherPetsAllergy": employees[key[0]]["HasOtherPetsAllergy"],
-                                "EmployeeHasSmokeAllergy": employees[key[0]]["HasSmokeAllergy"],
-                                "RelationHasDog": relations[key[1]]["HasDog"],
-                                "RelationHasCat": relations[key[1]]["HasCat"],
-                                "RelationHasOtherPets": relations[key[1]]["HasOtherPets"],
-                                "RelationSmokes": relations[key[1]]["Smokes"]}
+                                "Allergymismatch":int(allergy_mismatch)}
+            if save:
+                with open("TimeSlotDetails-2022-05-01.json", "w") as outfile:
+                    json.dump(self.out, outfile)
             return pd.DataFrame.from_dict(self.out, orient = "index")
 
     class Availability:
@@ -158,43 +161,46 @@ class ComputeDataframe:
 
         def compute_availibility(self,v,employee_id):
             if v['FromUtc'].time()<dt.time(12,00) and v['UntilUtc'].time()>dt.time(12,00): 
-                return self.out[employee_id][str(v['UntilUtc'].weekday())+"1"]*self.out[employee_id][str(v['UntilUtc'].weekday())+"2"]
+                return self.out[str(employee_id)][str(v['UntilUtc'].weekday())+"1"]*self.out[str(employee_id)][str(v['UntilUtc'].weekday())+"2"]
             elif v['FromUtc'].time()<dt.time(12,00):
-                return self.out[employee_id][str(v['UntilUtc'].weekday())+"1"]
+                return self.out[str(employee_id)][str(v['UntilUtc'].weekday())+"1"]
             else:
-                return self.out[employee_id][str(v['UntilUtc'].weekday())+"2"]
+                return self.out[str(employee_id)][str(v['UntilUtc'].weekday())+"2"]
 
         def refresh(self,v):
             for employee in self.out.keys():
-                self.out[employee][str(v['UntilUtc'].weekday())+"1"]*=0.7
-                self.out[employee][str(v['UntilUtc'].weekday())+"2"]*=0.7
+                self.out[str(employee)][str(v['UntilUtc'].weekday())+"1"]*=0.7
+                self.out[str(employee)][str(v['UntilUtc'].weekday())+"2"]*=0.7
         
         def update_employee(self,v):
             if v['FromUtc'].time()<dt.time(12,00) and v['UntilUtc'].time()>dt.time(12,00): 
-                self.out[v['EmployeeId']].update({str(v['UntilUtc'].weekday())+"1": 1, str(v['UntilUtc'].weekday())+"2": 1})
+                self.out[str(v['EmployeeId'])].update({str(v['UntilUtc'].weekday())+"1": 1, str(v['UntilUtc'].weekday())+"2": 1})
             elif v['FromUtc'].time()<dt.time(12,00):
-                self.out[v['EmployeeId']].update({str(v['UntilUtc'].weekday())+"1": 1})
+                self.out[str(v['EmployeeId'])].update({str(v['UntilUtc'].weekday())+"1": 1})
             else:
-                self.out[v['EmployeeId']].update({str(v['UntilUtc'].weekday())+"2": 1})
+                self.out[str(v['EmployeeId'])].update({str(v['UntilUtc'].weekday())+"2": 1})
 
-        def past_availability(self):
+        def past_availability(self,save=False):
             df=self.outer_class.extract.get_data("TS.Id,TS.EmployeeId,Ts.FromUtc,TS.UntilUtc","TimeSlots TS","where (TS.TimeSlotType=0 or TS.TimeSlotType=1) and TS.CreatedOnUTC<=TS.FromUtc")
             df.sort_values(by=['UntilUtc'],inplace=True)
             dct=df.to_dict(orient='index')
             for i in df['EmployeeId'].unique():
-                self.out[i]={"01":1,"02":1,"11":1,"12":1,"21":1,"22":1,"31":1,"32":1,"41":1,"42":1,'51':1,'52':1,'61':1,'62':1}
+                self.out[str(i)]={"01":1,"02":1,"11":1,"12":1,"21":1,"22":1,"31":1,"32":1,"41":1,"42":1,'51':1,'52':1,'61':1,'62':1}
             date=df['UntilUtc'].iloc[0].date()
             keys=list(self.out.keys())
             availabilities={}
             fake_availability=[]
             for k,v in tqdm(dct.items(),total=len(dct)):  
                 availability=self.compute_availibility(v,v['EmployeeId'])
-                availabilities[v['Id']]=availability
+                availabilities[str(v['Id'])]=availability
                 fake_availability.append(self.compute_availibility(v,random.choice(keys)))
                 if date!=v['UntilUtc'].date():
                     self.refresh(v)
                     date=v['UntilUtc'].date()
                 self.update_employee(v)
+            if save:
+                with open("Availabilities-2022-05-01.json", "w") as outfile:
+                    json.dump(self.out, outfile)
             return pd.Series(availabilities,name='Availability'),pd.DataFrame(fake_availability)
 
     class nonMatched:
@@ -219,9 +225,8 @@ class ComputeDataframe:
             MatchingTimeslots = self.create_fair_timeslot_details()
             TimeslotsDetails = pd.concat([MatchingTimeslots[:(NumberOfMismatchesPerFactor*2)], MismatchingTimeslots, MatchingTimeslots[(NumberOfMismatchesPerFactor*2):]], ignore_index = True)[:MaxDataLength]
 
-            MismatchingCharacteristics = self.create_characteristic_mismatches()
-            MatchingCharacteristics = self.create_fair_characteristics()
-            Characteristics = pd.concat([MatchingCharacteristics, MismatchingCharacteristics], ignore_index = True)[:MaxDataLength]
+            Characteristics=pd.DataFrame(0, index=np.arange(MaxDataLength), columns=['Allergymismatch'])
+            Characteristics.loc[0.75*MaxDataLength:,'Allergymismatch']=1
 
             return pd.concat([distance, ClientMismatch, TimeslotsDetails, Characteristics], axis = 1)
 
@@ -251,48 +256,6 @@ class ComputeDataframe:
             NumberOfPreviousVisits = np.concatenate((NumberOfPreviousVisits, np.zeros(int(np.ceil(self.good_distance_ratio*len(self.outerclass.train_df)*0.5)))), axis = None)[:size]
             return pd.DataFrame({"HoursLeftInMonth": HoursLeftInMonth, "HoursLeftInWeek": HoursLeftInWeek, "NumberOfMonthsLeftInContract": NumberOfMonthsLeftInContract, "DaysSinceLastVisit": DaysSinceLastVisit, "NumberOfPreviousVisits": NumberOfPreviousVisits})
 
-        def create_fair_characteristics(self):
-            size = int(np.ceil((1-self.good_distance_ratio)*len(self.outerclass.train_df)))
-            EmployeeHasDogAllergy = self.outerclass.train_df["EmployeeHasDogAllergy"].sample(n = size, replace = True, ignore_index = True)
-            EmployeeHasCatAllergy = self.outerclass.train_df["EmployeeHasCatAllergy"].sample(n = size, replace = True, ignore_index = True)
-            EmployeeHasOtherPetsAllergy = self.outerclass.train_df["EmployeeHasOtherPetsAllergy"].sample(n = size, replace = True, ignore_index = True)
-            EmployeeHasSmokeAllergy = self.outerclass.train_df["EmployeeHasSmokeAllergy"].sample(n = size, replace = True, ignore_index = True)
-            RelationHasDog = self.outerclass.train_df["RelationHasDog"].sample(n = size, replace = True, ignore_index = True)
-            RelationHasCat = self.outerclass.train_df["RelationHasCat"].sample(n = size, replace = True, ignore_index = True)
-            RelationHasOtherPets = self.outerclass.train_df["RelationHasOtherPets"].sample(n = size, replace = True, ignore_index = True)
-            RelationSmokes = self.outerclass.train_df["RelationSmokes"].sample(n = size, replace = True, ignore_index = True)
-            return pd.DataFrame({"EmployeeHasDogAllergy": EmployeeHasDogAllergy, "EmployeeHasCatAllergy": EmployeeHasCatAllergy, "EmployeeHasOtherPetsAllergy": EmployeeHasOtherPetsAllergy, "EmployeeHasSmokeAllergy": EmployeeHasSmokeAllergy, "RelationHasDog": RelationHasDog, "RelationHasCat": RelationHasCat, "RelationHasOtherPets": RelationHasOtherPets, "RelationSmokes": RelationSmokes})
-
-        def create_characteristic_mismatches(self):
-            DogAllergyRatio = self.outerclass.train_df['EmployeeHasDogAllergy'].mean()
-            CatAllergyRatio = self.outerclass.train_df['EmployeeHasCatAllergy'].mean()
-            OtherPetsAllergyRatio = self.outerclass.train_df['EmployeeHasOtherPetsAllergy'].mean()
-            SmokeAllergyRatio = self.outerclass.train_df['EmployeeHasSmokeAllergy'].mean()
-            DogRatio = self.outerclass.train_df['RelationHasDog'].mean()
-            CatRatio = self.outerclass.train_df['RelationHasCat'].mean()
-            OtherPetsRatio = self.outerclass.train_df['RelationHasOtherPets'].mean()
-            SmokesRatio = self.outerclass.train_df['RelationSmokes'].mean()
-
-            RatioAllergy = int(np.ceil(self.good_distance_ratio*len(self.outerclass.train_df) / 4))
-
-            DogAllergyList = np.concatenate((np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 3, p=[1-DogAllergyRatio, DogAllergyRatio])),axis=None)
-            DogRatioList = np.concatenate((np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 3, p=[1-DogRatio, DogRatio])),axis=None)
-            CatAllergyList = np.concatenate((np.random.choice([0,1], size=RatioAllergy, p=[1-CatAllergyRatio, CatAllergyRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 2, p=[1-CatAllergyRatio, CatAllergyRatio])),axis=None)
-            CatRatioList = np.concatenate((np.random.choice([0,1], size=RatioAllergy, p=[1-CatRatio, CatRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy * 2, p=[1-CatRatio, CatRatio])),axis=None)
-            OtherPetsAllergyList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 2, p=[1-OtherPetsAllergyRatio, OtherPetsAllergyRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy, p=[1-OtherPetsAllergyRatio, OtherPetsAllergyRatio])),axis=None)
-            OtherPetsRatioList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 2, p=[1-OtherPetsRatio, OtherPetsRatio]), np.ones(RatioAllergy), np.random.choice([0,1], size=RatioAllergy, p=[1-OtherPetsRatio, OtherPetsRatio])),axis=None)
-            SmokeAllergyList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 3, p=[1-SmokeAllergyRatio, SmokeAllergyRatio]), np.ones(RatioAllergy)),axis=None)
-            SmokesRatioList = np.concatenate((np.random.choice([0,1], size=RatioAllergy * 3, p=[1-SmokesRatio, SmokesRatio]), np.ones(RatioAllergy)),axis=None)
-
-            return pd.DataFrame({'EmployeeHasDogAllergy': DogAllergyList, 
-                    'EmployeeHasCatAllergy': CatAllergyList, 
-                    'EmployeeHasOtherPetsAllergy': OtherPetsAllergyList, 
-                    'EmployeeHasSmokeAllergy': SmokeAllergyList, 
-                    'RelationHasDog': DogRatioList, 
-                    'RelationHasCat': CatRatioList, 
-                    'RelationHasOtherPets': OtherPetsRatioList, 
-                    'RelationSmokes': SmokesRatioList})
-
     def func(self,x, a, b, c):
         return a * np.exp(-b * x) + c
 
@@ -304,15 +267,10 @@ class ComputeDataframe:
         _self=ComputeDataframe(self.source)
         dist=_self.Distance(self)
         distances=dist.get_distance_timeslots()
-        plt.hist(distances, bins=100,range=[0,20])
-        plt.show()
-
         tsd=_self.TimeSeriesDetails(self).main()
         df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')
         df['Label']=1
         self.train_df=df[df['Distances']<=20]
-
-        print(self.train_df.head())
 
         non_matches=self.nonMatched(self)
         generated_data = non_matches.compute()
@@ -330,3 +288,8 @@ class ComputeDataframe:
         generated_data['Label']=0
         self.train_df=pd.concat([self.train_df, generated_data])
         self.train_df.to_csv(PATH)
+
+if __name__=="__main__":
+    CURRENT_DIR=os.path.dirname(os.path.abspath(__file__))
+    df=ComputeDataframe(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
+    df.main('dataloading.train_df.csv')

@@ -59,7 +59,11 @@ class ExtractData():
                                                             THEN 1 ELSE 0 END AS "ClientMismatch"
                                             FROM TimeSlots AS TS, Employments as EM, EmployeeContracts as EC
                                             WHERE TS.TimeSlotType = 0 
+<<<<<<< HEAD
                                             AND TS.RelationID <> 996
+=======
+                                            AND TS.RelationID<>996
+>>>>>>> 3e4791b84f1bff1e3a5fa7593d4495a87ca178c5
                                             AND TS.FromUtc > '2020-02-07'
                                             AND TS.EmployeeId = EM.EmployeeId 
                                             AND EM.Id = EC.EmploymentId 
@@ -73,6 +77,7 @@ class ExtractData():
                                                 FROM (SELECT DISTINCT AD.ZipCodeNumberPart as RelationZipCode
                                                         FROM Relations as R, Addresses as AD
                                                         WHERE R.VisitAddressId IS NOT NULL
+                                                        AND R.ID<>996
                                                         AND AD.ZipCodeNumberPart IS NOT NULL
                                                         AND R.VisitAddressId = AD.Id) as Y, 
                                                     (SELECT DISTINCT AD.ZipCodeNumberPart as EmployeeZipCode
@@ -108,6 +113,7 @@ class ExtractData():
                                                 WHERE TS.TimeSlotType = 0 
                                                 AND TS.RelationID <> 996
                                                 AND TS.FromUtc > '2020-02-07'
+                                                AND TS.RelationID<>996
                                                 AND TS.RelationId = R.Id
                                                 AND R.VisitAddressId IS NOT NULL
                                                 AND AD.ZipCodeNumberPart IS NOT NULL
@@ -125,6 +131,7 @@ class ExtractData():
                                                 WHERE TS.TimeSlotType = 0 
                                                 AND TS.RelationID <> 996
                                                 AND TS.RecurringTimeSlotDefinitionId IS NULL
+                                                AND TS.RelationID<>996
                                                 AND TS.FromUtc > '2022-05-01'
                                                 AND TS.UntilUtc < '2023-01-01'
                                                 AND TS.RelationId = R.Id
@@ -137,8 +144,33 @@ class ExtractData():
     def retrieve_client_mismatches(self):
         df = cx.read_sql(self.connection, """SELECT DISTINCT IERC.EmployeeId, IERC.RelationId, IERC.CreatedOnUTC
                                                 FROM InvalidEmployeeRelationCombinations AS IERC
+<<<<<<< HEAD
                                                 ORDER BY IERC.CreatedOnUTC""")
         return df
+=======
+                                                WHERE IERC.RelationId<>996
+                                                ORDER BY IERC.CreatedOnUTC""")
+        return df.set_index("Id").to_dict(orient="index")
+
+    def retrieve_timeslot_data(self):
+        df = cx.read_sql(self.connection, """SELECT DISTINCT TS.Id, TS.EmployeeID, TS.RelationID, TS.FromUtc, TS.UntilUtc, AD.ZipCodeNumberPart, DATEDIFF(minute, TS.FromUtc, TS.UntilUtc) as TimeSlotLength,
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 21 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasDog", 
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 27 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasCat", 
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 33 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasOtherPets", 
+                                                    CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 37 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "Smokes"
+                                                FROM TimeSlots AS TS, Relations as R, Addresses as AD
+                                                WHERE TS.TimeSlotType = 0 
+                                                AND TS.RecurringTimeSlotDefinitionId IS NULL
+                                                AND TS.RelationID<>996
+                                                AND TS.FromUtc > '2022-05-01'
+                                                AND TS.UntilUtc < '2023-01-01'
+                                                AND TS.RelationId = R.Id
+                                                AND R.VisitAddressId IS NOT NULL
+                                                AND AD.ZipCodeNumberPart IS NOT NULL
+                                                AND R.VisitAddressId = AD.Id
+                                                ORDER BY TS.UntilUtc""")
+        return df.to_dict(orient="index")
+>>>>>>> 3e4791b84f1bff1e3a5fa7593d4495a87ca178c5
 
     def get_data(self,get_var,_from):
         df = cx.read_sql(self.connection,"SELECT {} from dbo.{}".format(get_var,_from))
@@ -149,8 +181,8 @@ class ExtractData():
                                                 CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 27 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasCat", 
                                                 CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 33 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "HasOtherPets", 
                                                 CASE WHEN EXISTS (SELECT * FROM RelationCharacteristics AS RC WHERE RC.CharacteristicId = 37 AND RC.RelationId = R.Id) THEN 1 ELSE 0 END AS "Smokes"
-                                                FROM Relations as R""")
-        return df
+                                                FROM Relations as R where R.Id<>996""")
+        return df.set_index("Id").to_dict(orient="index")
 
     def get_employee_characteristics(self):
         df = cx.read_sql(self.connection, """SELECT E.Id, 
@@ -159,8 +191,13 @@ class ExtractData():
                                                 CASE WHEN EXISTS (SELECT * FROM EmployeeCharacteristics AS EC WHERE EC.CharacteristicId = 4 AND EC.EmployeeId = E.Id) THEN 1 ELSE 0 END AS "HasOtherPetsAllergy", 
                                                 CASE WHEN EXISTS (SELECT * FROM EmployeeCharacteristics AS EC WHERE EC.CharacteristicId = 5 AND EC.EmployeeId = E.Id) THEN 1 ELSE 0 END AS "HasSmokeAllergy"
                                                 FROM Employees as E""")
-        return df
+        return df.set_index("Id").to_dict(orient="index")
 
     def get_data(self,get_var,_from,where=""):
+<<<<<<< HEAD
         df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {} and TS.FromUtc >= '2020-02-07' AND TS.RelationID <> 996".format(get_var,_from,where))
         return df
+=======
+        df = cx.read_sql(self.connection,"SELECT {} from dbo.{} {} and TS.FromUtc >= '2020-02-07' and TS.RelationId<>996".format(get_var,_from,where))
+        return df
+>>>>>>> 3e4791b84f1bff1e3a5fa7593d4495a87ca178c5

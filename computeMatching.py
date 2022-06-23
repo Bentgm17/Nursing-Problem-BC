@@ -8,6 +8,11 @@ from time import time
 import json
 import dateutil
 from ast import literal_eval
+import os
+import csv
+
+
+CURRENT_DIR=os.path.dirname(os.path.abspath(__file__))
 
 class computeMatching:
     def __init__(self,source):
@@ -44,13 +49,26 @@ class computeMatching:
             VisitsDict[int(k)]["DateOfLastVisit"] = dateutil.parser.parse(VisitsDict[int(k)]["DateOfLastVisit"])
         return VisitsDict, AvailabilityDict
 
+    def get_lat_long_dict(self):
+        with open(CURRENT_DIR+"/dataloading/NL.csv", mode='r') as inp:
+            reader = csv.reader(inp)
+            dict_from_csv = {rows[1]:{"latitude":rows[10],"longitude":rows[11]} for rows in reader}
+        return dict_from_csv
+
     def main(self): 
+        # print(CURRENT_DIR+"/dataloading/NL.txt")
+        dict_from_csv = {}
+        lat_long_dict=self.get_lat_long_dict()
         dict = {}
         EmployeeData = self.extract.retrieve_employee_data()
         EmployeeData = EmployeeData.to_dict(orient="index")
         TimeSlotData = self.extract.retrieve_timeslot_data()
         TimeSlotData = TimeSlotData.set_index("Id").to_dict(orient="index")
+
         PreviousMatches, Availability = self.read_jsons()
+        PreviousMatches = {}
+        Availability = {}
+
         for k, v in EmployeeData.items():
             if v["EmployeeId"] not in Availability:
                 Availability[v["EmployeeId"]] = {"01":1,"02":1,"11":1,"12":1,"21":1,"22":1,"31":1,"32":1,"41":1,"42":1,'51':1,'52':1,'61':1,'62':1}
@@ -180,7 +198,10 @@ class computeMatching:
         return pd.DataFrame(dict).T
 
 if __name__=="__main__":
-    # Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
-    Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod-2022-6-17-15-25-ANONYMOUS")
+    # extract=dataloading.read_db.ExtractData(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
+    # for i in tqdm(range(100)):
+    #     extract.get_data('Id','Timeslots TS')
+    Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
+    # Matching=computeMatching(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod-2022-6-17-15-25-ANONYMOUS")
     df = Matching.main()
-    df.to_csv("C:/Users/niels/Desktop/Niels/Colleges/'21-'22 BA/Project Business Case/Business Case/test.csv")
+    # df.to_csv("C:/Users/niels/Desktop/Niels/Colleges/'21-'22 BA/Project Business Case/Business Case/test.csv")

@@ -65,7 +65,7 @@ class ComputeDataframe:
             dist = pgeocode.GeoDistance('NL')
             distance=dist.query_postal_code(df['ZipCode_x'].apply(lambda x: "".join(x.split(" "))[:4]).to_list(),
                                             df['ZipCode_y'].apply(lambda x: "".join(x.split(" "))[:4]).to_list())
-            return pd.DataFrame(distance,columns=['Distances']).set_index(df.index)
+            return pd.DataFrame(distance,columns=['Distances']).set_index(df.index.map(lambda x:str(x)))
 
         def get_zipcode(self):
             employee_adres=self.outer_class.extract.join_addresses(target="Employees").dropna()
@@ -141,7 +141,7 @@ class ComputeDataframe:
                                       employees[key[0]]["HasSmokeAllergy"]/relations[key[1]]["Smokes"] if relations[key[1]]["Smokes"] else 0]) != 0)
 
                 ## Save all calculated variables in self.dict
-                self.out[k] = {"ClientMismatch": v["ClientMismatch"],  
+                self.out[str(k)] = {"ClientMismatch": v["ClientMismatch"],  
                                 "HoursLeftInMonth": temp[key[0]]["HoursLeftInMonth"],
                                 "HoursLeftInWeek": temp[key[0]]["HoursLeftInWeek"],
                                 "NumberOfMonthsLeftInContract": 24 if math.isnan(NumberOfMonthsLeftInContract) else NumberOfMonthsLeftInContract,
@@ -268,14 +268,6 @@ class ComputeDataframe:
         dist=_self.Distance(self)
         distances=dist.get_distance_timeslots()
         tsd=_self.TimeSeriesDetails(self).main()
-        df=tsd.merge(distances, how='inner',  left_index=True, right_on='Id')
-        df['Label']=1
-        self.train_df=df[df['Distances']<=20]
-
-        non_matches=self.nonMatched(self)
-        generated_data = non_matches.compute()
-
-        tsd=_self.TimeSeriesDetails(self).main()
         df=tsd.merge(distances, how='inner', left_index=True, right_on='Id')
         avb=_self.Availability(self)
         real_availability,fake_availability=avb.past_availability()
@@ -292,4 +284,4 @@ class ComputeDataframe:
 if __name__=="__main__":
     CURRENT_DIR=os.path.dirname(os.path.abspath(__file__))
     df=ComputeDataframe(source="mssql://SA:Assist2022@localhost:1401/qpz-florein-prod_bu_20220414-ANONYMOUS")
-    df.main('dataloading.train_df.csv')
+    df.main('dataloading/train_df.csv')
